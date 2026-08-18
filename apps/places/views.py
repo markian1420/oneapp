@@ -23,6 +23,7 @@ from apps.core.views import module
 from apps.fuel.models import FuelType, Vehicle
 from apps.fuel.services import quotes_for
 
+from .calibration import calibrate, coverage_by_region
 from .geo import bounding_box, road_km
 from .models import KIND_STYLE, Place, PlaceKind
 
@@ -226,3 +227,30 @@ def place_favorite(request, pk: int):
     if next_url.startswith("/") and not next_url.startswith("//"):
         return redirect(next_url)
     return redirect("places:detail", pk=place.pk)
+
+
+@login_required
+@module("places_calibration", "Where am I")
+def calibration(request):
+    """What the app knows about wherever you currently are.
+
+    Built for the case of travelling: the app was calibrated in Metro Manila,
+    and almost everything in it is regional. Rather than let the map quietly
+    turn up empty in the province, this says which parts apply here and what
+    would fix the rest.
+    """
+    state = None
+    try:
+        latitude = float(request.GET["lat"])
+        longitude = float(request.GET["lng"])
+    except (KeyError, ValueError):
+        latitude = longitude = None
+
+    if latitude is not None:
+        state = calibrate(latitude, longitude)
+
+    return render(request, "places/calibration.html", {
+        "state": state,
+        "coverage": [r for r in coverage_by_region() if r["places"]],
+        "empty_regions": [r for r in coverage_by_region() if not r["places"]],
+    })

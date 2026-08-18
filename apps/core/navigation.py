@@ -25,6 +25,7 @@ MODULES: tuple[Module, ...] = (
     Module("home", "Overview", "layout-dashboard", "core:home", ""),
     Module("insights", "Today", "sparkles", "insights:briefing", ""),
     Module("places_map", "Map", "map", "places:map", ""),
+    Module("places_calibration", "Where am I", "locate", "places:calibration", ""),
     Module("fuel_map", "Fuel map", "fuel", "fuel:map", "Fuel"),
     Module("fuel_stations", "Stations", "map-pin", "fuel:stations", "Fuel"),
     Module("fuel_fillups", "Fill-ups", "receipt", "fuel:fillups", "Fuel"),

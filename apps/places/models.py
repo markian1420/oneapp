@@ -153,3 +153,34 @@ class Place(models.Model):
     @property
     def style(self) -> dict:
         return KIND_STYLE.get(PlaceKind(self.kind), KIND_STYLE[PlaceKind.FUEL])
+
+
+class GeoCache(models.Model):
+    """A resolved coordinate, kept so the same place is not looked up twice.
+
+    Nominatim is free and asks for no more than a request a second, which is
+    easy to honour if a day of moving around one city costs a single lookup.
+    Keyed on a coordinate rounded to about a kilometre - far finer than a
+    region boundary needs.
+    """
+
+    latitude = models.DecimalField(max_digits=6, decimal_places=2)
+    longitude = models.DecimalField(max_digits=6, decimal_places=2)
+
+    region = models.CharField(max_length=40)
+    region_name = models.CharField(max_length=80, blank=True)
+    province = models.CharField(max_length=120, blank=True)
+    city = models.CharField(max_length=120, blank=True)
+    looked_up_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "geocode cache entry"
+        verbose_name_plural = "geocode cache"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["latitude", "longitude"], name="uniq_geocache_point"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.latitude},{self.longitude} -> {self.region}"

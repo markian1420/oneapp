@@ -6,7 +6,8 @@ presented as a fact.
 
 | Module | What it answers |
 |---|---|
-| **Map** | What is around me, nearest first — 17,648 places across 8 kinds |
+| **Map** | What is around me, nearest first — 18,534 places across 9 kinds |
+| **Where am I** | Which parts of the app actually apply where I am standing |
 | **Fuel** | Where should I actually refuel, once the detour is paid for |
 | **Grocery** | What is cheap this week, from the DA daily index |
 | **Where to buy** | What is near me, what I paid there, what promos are running |
@@ -451,6 +452,41 @@ volumes a personal budget produces, anything opaque would be fitting noise.
 Every insight states how many observations it rests on, so a thin one reads as
 thin. When it has nothing to say it lists exactly what each missing insight
 needs, rather than showing an empty screen.
+
+## Travelling — what recalibrates and what does not
+
+The app was set up around Metro Manila, and **almost everything in it is
+regional**: the DOE publishes fuel advisories per region, the DA publishes its
+commodity index for NCR only, and places are imported one province at a time.
+
+Drive home to the province and none of that fails loudly. The map just looks
+empty and the prices just look like prices. So **Where am I** resolves your
+region and states what stopped applying.
+
+Standing in Batangas City with a Metro Manila install:
+
+```
+Batangas City, Batangas — CALABARZON (IV-A) — 0 places imported
+
+[warn] No places imported for CALABARZON
+       fix: python manage.py import_places --area "Batangas" --kind all
+[warn] No fuel advisory for CALABARZON this week
+       fix: Enter it under Fuel, DOE advisory — pick this region
+[warn] The commodity index does not cover this region
+       fix: Treat commodity prices as NCR-only while you are here
+```
+
+That third one is the important one, because it is the gap that would otherwise
+be invisible. The commodity screen keeps working perfectly and shows Metro
+Manila wet market rates — the wrong benchmark 100km away. Regional DA offices
+publish their own bulletins in their own formats, and this app does not read
+them.
+
+Location is resolved through Nominatim, OpenStreetMap's own lookup service.
+Results are cached against a coordinate rounded to about a kilometre, so a day
+of moving around one city costs a single lookup — the service is free and asks
+for no more than a request a second. Nothing about your location is stored
+beyond that rounded point.
 
 ## Offline and installing on a phone
 
