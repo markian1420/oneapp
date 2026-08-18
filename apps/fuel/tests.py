@@ -643,3 +643,60 @@ class StationImportTests(TestCase):
 
         self._run()
         self.assertTrue(Place.objects.get(osm_id=1).is_favorite)
+
+
+class PriceCoverageTests(TestCase):
+    """The empty state has to explain itself, not just look broken."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("driver", password="not-a-real-password")
+        self.client.force_login(self.user)
+        self.station = make_station()
+
+    def test_with_no_advisory_the_map_says_why_and_offers_the_fix(self):
+        response = self.client.get(reverse("fuel:map"))
+
+        self.assertContains(response, "Nothing is priced yet")
+        # The fix is a link, not a paragraph telling you to go and find it.
+        self.assertContains(response, reverse("fuel:advisory"))
+
+    def test_the_stations_list_carries_the_same_prompt(self):
+        response = self.client.get(reverse("fuel:stations"))
+        self.assertContains(response, "Nothing is priced yet")
+
+    def test_a_stale_advisory_reads_differently_from_none_at_all(self):
+        DOEAdvisory.objects.create(
+            week_of=week_start() - timedelta(days=21), region="NCR", brand="",
+            fuel_type="gas_95", price=Decimal("77.20"),
+        )
+        response = self.client.get(reverse("fuel:map"))
+
+        # Falling back to an old week is a different problem from having
+        # nothing, and needs a different prompt.
+        self.assertContains(response, "No advisory for the week")
+        self.assertNotContains(response, "Nothing is priced yet")
+
+    def test_once_this_week_is_entered_the_warning_goes(self):
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="",
+            fuel_type="gas_95", price=Decimal("77.20"),
+        )
+        response = self.client.get(reverse("fuel:map"))
+
+        self.assertNotContains(response, "Nothing is priced yet")
+        self.assertContains(response, "Priced")
+
+    def test_one_prevailing_row_prices_every_station(self):
+        # The claim the banner makes, pinned: a single blank-brand NCR row
+        # gives every station in the region a price.
+        for index in range(5):
+            make_station(osm_id=500 + index, brand=f"Brand {index}")
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="",
+            fuel_type="gas_95", price=Decimal("77.20"),
+        )
+
+        stations = list(Place.objects.filter(kind=PlaceKind.FUEL))
+        quotes = quotes_for(stations, "gas_95")
+        self.assertTrue(all(q.price == Decimal("77.20") for q in quotes.values()))
+        self.assertTrue(all(q.tier == PriceTier.ESTIMATED for q in quotes.values()))

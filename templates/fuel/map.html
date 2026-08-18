@@ -24,11 +24,13 @@
     <p class="text-sm font-bold text-amber-900 dark:text-amber-200">No stations imported yet.</p>
     <p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
       Pull them from OpenStreetMap with
-      <code class="kbd">python manage.py import_stations --area NCR</code>
-      (or <code class="kbd">--area all</code> for the whole country).
+      <code class="kbd">python manage.py import_places --area NCR --kind fuel</code>
+      (or <code class="kbd">--kind all</code> for every kind of place).
     </p>
   </div>
 {% endif %}
+
+{% include "fuel/_price_coverage.html" %}
 
 <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
 

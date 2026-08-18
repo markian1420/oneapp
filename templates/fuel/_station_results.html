@@ -50,7 +50,7 @@ arriving with JavaScript off or a bookmarked link.
       {% if q or brand or region %}
         Try a wider search, or <a href="{% url 'fuel:stations' %}" class="font-bold text-brand-700 underline">reset the filters</a>.
       {% else %}
-        Import them first: <code class="kbd">python manage.py import_stations --area NCR</code>
+        Import them first: <code class="kbd">python manage.py import_places --area NCR --kind fuel</code>
       {% endif %}
     </p>
   </div>

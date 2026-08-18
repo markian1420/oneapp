@@ -26,7 +26,7 @@ from .forms import AdvisoryEntryForm, FillUpForm, PriceReportForm, VehicleForm
 from apps.places.models import Place, PlaceKind
 from apps.places.regions import REGION_NAMES
 
-from .models import DOEAdvisory, FillUp, FuelType, Vehicle
+from .models import DOEAdvisory, FillUp, FuelType, PriceObservation, Vehicle
 from .services import fuel_economy, quotes_for, score_options, week_start
 
 def fuel_places():
@@ -54,6 +54,31 @@ def _fuel_choice(request, default: str = "") -> str:
         return default
     vehicle = Vehicle.objects.filter(is_default=True).first()
     return vehicle.default_fuel_type if vehicle else FuelType.GAS_95
+
+
+def price_coverage() -> dict:
+    """Why stations do or do not have a price yet.
+
+    Every station showing "No price" is the correct answer to an empty
+    database, but on its own it reads as a broken map rather than a one-minute
+    task. This gives the screens enough to say which of the two it is.
+    """
+    week = week_start()
+    advisory_rows = DOEAdvisory.objects.filter(week_of=week).count()
+    latest = DOEAdvisory.objects.order_by("-week_of").first()
+
+    return {
+        "week": week,
+        "advisory_rows": advisory_rows,
+        "latest_advisory": latest,
+        "logged_places": (
+            PriceObservation.objects.values("place_id").distinct().count()
+        ),
+        "stations": fuel_places().count(),
+        # The distinction that matters: nothing at all, versus something out
+        # of date. They need different prompts.
+        "has_any_advisory": latest is not None,
+    }
 
 
 def _decimal(raw, fallback: Decimal) -> Decimal:
@@ -102,6 +127,7 @@ def station_map(request):
             vehicle.tank_capacity_l if vehicle else Decimal("40")
         ),
         "station_count": fuel_places().count(),
+        "coverage": price_coverage(),
     }
     return render(request, "fuel/map.html", context)
 
@@ -257,6 +283,7 @@ def stations(request):
             .values_list("brand", flat=True).order_by("brand").distinct()
         ),
         "favorites_only": request.GET.get("favorites") == "1",
+        "coverage": price_coverage(),
     }
 
     # htmx asks for the rows alone; a browser, a bookmark or a crawler asks for
@@ -381,7 +408,8 @@ def fill_up_create(request):
     if not fuel_places().exists():
         messages.warning(
             request,
-            "No stations imported yet. Run: python manage.py import_stations --area NCR",
+            "No stations imported yet. Run: "
+            "python manage.py import_places --area NCR --kind fuel",
         )
         return redirect("fuel:stations")
 

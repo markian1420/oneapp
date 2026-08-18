@@ -148,7 +148,6 @@ OneApp/
 │       ├── forms.py                # Fill-up, price report, advisory entry
 │       ├── views.py                # Map, stations, fill-ups, advisory, vehicles
 │       └── management/commands/
-│           ├── import_stations.py      # Pull stations from OpenStreetMap
 │           └── import_doe_advisory.py  # Load a DOE advisory spreadsheet
 │   └── grocery/
 │       ├── models.py               # Commodity, CommodityPrice
@@ -425,7 +424,7 @@ those settings are gated behind `DEBUG=False` and switch on in deployment.
    price on the map that outranks every estimate for the next two weeks.
 3. **In passing** — note a price board from a station page without buying. It
    still counts as first-hand.
-4. **Every few months** — re-run `import_stations` to pick up newly mapped
+4. **Every few months** — re-run `import_places` to pick up newly mapped
    stations.
 
 ## Design notes
@@ -492,7 +491,7 @@ in a second tile provider.
 **The map is blank and markers are broken images.** `static/vendor/` is missing.
 `npm run build` vendors it; `npm run vendor` alone does just that part.
 
-**`import_stations` reports "Overpass would not answer".** The public instances
+**`import_places` reports "Overpass would not answer".** The public instances
 were busy — they answer with 504s or an HTML error page under load. It retries
 five times across both mirrors with backoff, then gives up on that area and
 moves to the next without corrupting anything. Wait and re-run; it resumes

@@ -1,0 +1,57 @@
+{% comment %}
+  Why stations have no price, and what to do about it.
+
+  "No price" on every pin is the correct answer to an empty database, but on
+  its own it reads as a broken map. This says which of the two it is and links
+  straight at the fix, because the fix is about a minute of typing.
+{% endcomment %}
+{% if coverage.stations and not coverage.advisory_rows %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">
+      {% if coverage.has_any_advisory %}
+        No advisory for the week of {{ coverage.week|date:"d M Y" }} yet
+      {% else %}
+        Nothing is priced yet &mdash; that is why every pin is grey
+      {% endif %}
+    </p>
+
+    <p class="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-300">
+      {% if coverage.has_any_advisory %}
+        Stations are falling back to the week of
+        {{ coverage.latest_advisory.week_of|date:"d M Y" }}, which is labelled
+        <em>Estimated</em> rather than passed off as current. Entering this week
+        takes about a minute.
+      {% else %}
+        A station gets a price from one of two places: a fill-up you logged there,
+        or the DOE weekly advisory for its brand and region. Neither exists yet, so
+        the honest answer for all
+        <strong>{{ coverage.stations }}</strong> of them is "no price".
+        <strong>Entering one week of advisory prices prices every single one.</strong>
+      {% endif %}
+    </p>
+
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a href="{% url 'fuel:advisory' %}" class="btn-primary btn-sm">
+        Enter this week&rsquo;s prices
+      </a>
+      <a href="{% url 'fuel:fillup_create' %}" class="btn-ghost btn-sm">
+        Or log a fill-up
+      </a>
+    </div>
+
+    <p class="mt-3 text-[12px] leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+      Where to get the numbers: the DOE site has been returning errors, so the
+      quickest source is the price board at any station, your last receipt, or a
+      news report of the week&rsquo;s price adjustment. One set of prevailing NCR
+      prices is enough to start &mdash; brand-specific rows only make it sharper.
+    </p>
+  </div>
+{% elif coverage.stations and coverage.advisory_rows %}
+  <div class="mb-5 flex flex-wrap items-center gap-2 text-[12px]">
+    <span class="badge-success">Priced</span>
+    <span class="text-ink-muted dark:text-slate-400">
+      {{ coverage.advisory_rows }} advisory price{{ coverage.advisory_rows|pluralize }} for the week of
+      {{ coverage.week|date:"d M Y" }}{% if coverage.logged_places %} · {{ coverage.logged_places }} station{{ coverage.logged_places|pluralize }} with your own price{% endif %}
+    </span>
+  </div>
+{% endif %}
