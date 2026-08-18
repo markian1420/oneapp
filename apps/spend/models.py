@@ -217,12 +217,28 @@ class Promo(models.Model):
     source_note = models.CharField(
         max_length=160, blank=True, help_text="Where you saw it."
     )
+    source_ref = models.CharField(
+        max_length=160,
+        blank=True,
+        help_text="The publisher's own id for this promo, so a re-import "
+                  "updates it in place instead of duplicating it.",
+    )
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["ends_on", "-added_at"]
+        constraints = [
+            # Only applies to imported promos; hand-entered ones leave
+            # source_ref blank and are never deduplicated against each other.
+            models.UniqueConstraint(
+                fields=["issuer", "source_ref"],
+                condition=models.Q(source_ref__gt=""),
+                name="uniq_promo_source_ref",
+            )
+        ]
         indexes = [
             models.Index(fields=["category", "ends_on"], name="idx_promo_lookup"),
+            models.Index(fields=["issuer", "source_ref"], name="idx_promo_source"),
         ]
 
     def __str__(self) -> str:

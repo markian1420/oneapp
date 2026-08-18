@@ -50,7 +50,7 @@ varies enormously. This table is the single most useful thing in this file:
 | **Dining** | None | — | Your receipts only |
 | **Apparel** | None | — | Cost per wear |
 | **Promos** | None at all | — | Typed in by hand |
-| **Card promos** | None, but bank pages publish dates as text | — | Typed in by hand |
+| **Card promos** | **Metrobank publishes structured JSON** | Continuous | Typed in by hand |
 
 Verified rather than assumed: the DOE per-station dashboard on
 `legacy.doe.gov.ph` no longer resolves, `doe.gov.ph/e-presyo` returns HTTP 500,
@@ -336,10 +336,25 @@ grouped by issuer and filterable by bank and category. Those are facts about the
 banks, not about you. You read the list and decide for yourself which of your
 cards qualifies; the app never learns the answer.
 
-Bank promo pages are the one corner of this that is genuinely readable — BPI, for
-instance, publishes the merchant, the offer and **"Valid until"** as plain text,
-which is more than any fast food chain manages. So entry is quick and the end
-date is usually available, unlike merchant promos.
+Bank pages turn out to be the best data source in the whole project. Metrobank's
+promos page is a Next.js app whose `__NEXT_DATA__` payload carries **every promo
+as a structured record** — title, description, start and expiry timestamps,
+qualifying cards and a category. No HTML scraping, no OCR, and a real end date on
+every row.
+
+```powershell
+.\.venv\Scripts\python.exe manage.py import_bank_promos --bank metrobank
+```
+
+That pulled **2,610 published promos, of which 667 are still live** — the other
+1,943 had already expired and were left out, which is the entire point. Where a
+promo names a brand the app already has on the map (Domino's, IKEA, Watsons,
+Genki Sushi), it is filed under that place's real category rather than the bank's
+looser label.
+
+BPI publishes "Valid until" as plain text too, so it is a good candidate for the
+next importer. Merchant promos remain hand-entered — their terms are baked into
+graphics.
 
 A purchase records **how** you paid as free text ("BPI credit", "cash", "GCash").
 That is a note for grouping spend by payment method, not card data.

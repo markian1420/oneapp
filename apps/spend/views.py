@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.core.categories import SpendCategory
-from apps.core.tables import Column, build_table
+from apps.core.tables import Column, build_list_table, build_table
 from apps.core.views import module
 
 from .forms import ItemForm, PromoForm, PurchaseForm
@@ -199,13 +199,37 @@ def card_promos(request):
 
     live = live_promos(category=category, issuer=issuer, card_promos=True)
 
-    by_issuer: dict[str, list] = {}
-    for promo in live:
-        by_issuer.setdefault(promo.issuer, []).append(promo)
+    # Paginated like every other list in the app. One bank alone publishes 667
+    # live promos, and rendering them all was a 667-row table - the exact thing
+    # server-side paging exists to avoid.
+    columns = [
+        Column("title", "Offer", order_by=("title",)),
+        Column("issuer", "Bank", order_by=("issuer",)),
+        Column("brand", "Where", order_by=("brand",)),
+        Column("card_name", "Qualifying card", order_by=("card_name",)),
+        Column("discount", "Offer", order_by=("discount_pct",), align="right"),
+        Column("ends_on", "Ends", order_by=("ends_on",)),
+    ]
+    table = build_list_table(
+        request,
+        [
+            {
+                "promo": p, "title": p.title, "issuer": p.issuer,
+                "brand": p.brand, "card_name": p.card_name,
+                "discount": p.discount_pct or p.price or 0,
+                "ends_on": p.ends_on,
+            }
+            for p in live
+        ],
+        columns,
+        default_sort="ends_on",
+        preserve=("issuer", "category"),
+    )
 
     return render(request, "spend/card_promos.html", {
-        "live": live,
-        "by_issuer": sorted(by_issuer.items()),
+        "table": table,
+        "rows": table.page.object_list,
+        "total": len(live),
         "issuers": issuers(),
         "issuer": issuer,
         "categories": SpendCategory.choices,

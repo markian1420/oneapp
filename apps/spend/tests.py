@@ -302,32 +302,32 @@ class CardPromoTests(TestCase):
 
         response = self.client.get(reverse("spend:card_promos"))
         self.assertEqual(
-            [p.title for p in response.context["live"]], ["Needs a BPI card"]
+            [r["promo"].title for r in response.context["rows"]],
+            ["Needs a BPI card"],
         )
 
-    def test_promos_group_by_bank(self):
-        self._promo(title="A", issuer="BPI")
-        self._promo(title="B", issuer="BPI")
-        self._promo(title="C", issuer="BDO")
+    def test_the_list_is_paged_rather_than_rendered_whole(self):
+        # One bank alone publishes hundreds of live promos; rendering them all
+        # is the exact thing server-side paging exists to avoid.
+        for index in range(25):
+            self._promo(title=f"Deal {index}", issuer="BPI")
 
-        grouped = dict(
-            self.client.get(reverse("spend:card_promos")).context["by_issuer"]
-        )
-        self.assertEqual(len(grouped["BPI"]), 2)
-        self.assertEqual(len(grouped["BDO"]), 1)
+        response = self.client.get(reverse("spend:card_promos"))
+        self.assertEqual(response.context["total"], 25)
+        self.assertLess(len(response.context["rows"]), 25)
 
     def test_filtering_by_bank(self):
         self._promo(title="A", issuer="BPI")
         self._promo(title="C", issuer="BDO")
 
         response = self.client.get(reverse("spend:card_promos"), {"issuer": "BDO"})
-        self.assertEqual([p.title for p in response.context["live"]], ["C"])
+        self.assertEqual([r["promo"].title for r in response.context["rows"]], ["C"])
 
     def test_an_expired_card_promo_is_not_listed(self):
         self._promo(title="Old", issuer="BPI",
                     ends_on=timezone.localdate() - timedelta(days=1))
         self.assertEqual(
-            self.client.get(reverse("spend:card_promos")).context["live"], []
+            list(self.client.get(reverse("spend:card_promos")).context["rows"]), []
         )
 
     def test_a_brand_promo_and_a_category_promo_both_match_a_place(self):
