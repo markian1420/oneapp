@@ -64,6 +64,59 @@
   </div>
 {% endif %}
 
+<div class="panel mt-5">
+  <div class="panel-header">
+    <div class="min-w-0">
+      <p class="eyebrow">Data freshness</p>
+      <p class="text-sm font-bold text-ink dark:text-white">
+        {{ freshness.current }} of {{ freshness.total }} sources current
+      </p>
+    </div>
+    {% if freshness.attention %}
+      <span class="badge-warning">{{ freshness.attention|length }} need a refresh</span>
+    {% else %}
+      <span class="badge-success">All current</span>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap rounded-t-none border-0">
+    <table class="table min-w-[560px]">
+      <thead>
+        <tr><th>Source</th><th>Publishes</th><th>Last fetched</th><th>State</th></tr>
+      </thead>
+      <tbody>
+        {% for status in freshness.statuses %}
+          <tr>
+            <td>
+              <span class="font-bold text-ink dark:text-slate-200">{{ status.source.name }}</span>
+              {% if status.source.note %}
+                <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ status.source.note }}</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-[12px]">{{ status.source.cadence }}</td>
+            <td class="whitespace-nowrap text-[12px] mono">{{ status.age_label }}</td>
+            <td><span class="{{ status.badge_class }}">{{ status.label }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel-pad">
+    <p class="text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      Nothing here is live. Philippine pump prices move once a week on a Tuesday,
+      the DA publishes its commodity index once a weekday and often late in the
+      afternoon, and banks add promos when they feel like it. So rather than claim
+      real time, every number carries its own date and every feed states the cadence
+      it genuinely publishes on.
+    </p>
+    <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      One command refreshes the lot:
+      <code class="kbd">python manage.py refresh_all</code>
+    </p>
+  </div>
+</div>
+
 <div class="panel panel-pad mt-5">
   <p class="eyebrow">How this works</p>
   <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
