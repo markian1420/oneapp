@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.fuel.forms import DateTimeLocalInput
 from apps.places.models import Place
 
-from .models import Promo, Purchase, PurchaseItem
+from .models import Product, ProductPrice, Promo, Purchase, PurchaseItem
 
 
 class PurchaseForm(forms.ModelForm):
@@ -133,4 +133,65 @@ class PromoForm(forms.ModelForm):
             self.add_error(
                 "discount_pct", "Give a discount or a fixed price, or it says nothing."
             )
+        return cleaned
+
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ["brand", "model", "variant", "target_price", "notes"]
+        labels = {
+            "model": "Model",
+            "variant": "Variant",
+            "target_price": "Your target price (₱)",
+        }
+        help_texts = {
+            "brand": "Salomon, Nike, Uniqlo…",
+            "model": "XT-6, Air Force 1…",
+        }
+
+
+class ProductPriceForm(forms.ModelForm):
+    """Record a price you found somewhere.
+
+    The trust tier is asked for, not guessed. The app can only verify a brand's
+    own domain and the known marketplaces; whether a multi-brand shop is a real
+    stockist is something only you can confirm, and pretending otherwise would
+    put a reassuring badge on a seller nobody checked.
+    """
+
+    class Meta:
+        model = ProductPrice
+        fields = ["seller", "url", "price", "size", "in_stock", "trust",
+                  "seen_on", "notes"]
+        widgets = {"seen_on": forms.DateInput(attrs={"type": "date"})}
+        labels = {
+            "seller": "Seller",
+            "url": "Link",
+            "price": "Price (₱)",
+            "in_stock": "In stock",
+            "trust": "How far do you trust this seller",
+            "seen_on": "Seen on",
+        }
+
+    def __init__(self, *args, product=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.product = product
+
+    def clean(self):
+        cleaned = super().clean()
+        url = cleaned.get("url", "")
+
+        # Auto-detect only what is actually verifiable, and only to raise the
+        # tier the user chose - never to quietly downgrade their judgement.
+        if url and self.product:
+            from .products import classify
+
+            detected = classify(url, self.product.brand)
+            if detected == "official":
+                cleaned["trust"] = ProductPrice.Trust.OFFICIAL
+            elif detected == "marketplace" and cleaned.get("trust") in (
+                None, "", ProductPrice.Trust.UNVERIFIED
+            ):
+                cleaned["trust"] = ProductPrice.Trust.MARKETPLACE
         return cleaned

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}{{ product.label }} · OneApp{% endblock %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ quotes|length }} price{{ quotes|length|pluralize }} recorded
+    {% if product.target_price %} · your target &#8369;{{ product.target_price|floatformat:0|intcomma }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block content %}
+{% if warnings %}
+  <div class="panel panel-pad mb-5 border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10">
+    <p class="text-sm font-bold text-red-900 dark:text-red-200">
+      Check {{ warnings|length }} of these seller{{ warnings|length|pluralize }} before buying
+    </p>
+    <ul class="mt-2 space-y-2">
+      {% for warning in warnings %}
+        <li class="text-[13px] leading-relaxed text-red-800 dark:text-red-300">
+          <code class="kbd">{{ warning.domain }}</code> &mdash; {{ warning.detail }}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="mb-5 grid gap-4 sm:grid-cols-2">
+  <div class="metric metric-primary">
+    <p class="eyebrow">Cheapest you can trust</p>
+    <p class="metric-value">
+      {% if best_trusted %}&#8369;{{ best_trusted.price|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}
+    </p>
+    <p class="text-[12px] font-bold text-white/85">
+      {% if best_trusted %}
+        {{ best_trusted.seller }} · {{ best_trusted.trust_label|lower }}
+      {% else %}
+        No price yet from a seller you have marked as trusted
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="metric">
+    <p class="eyebrow">Cheapest anywhere</p>
+    <p class="metric-value">
+      {% if cheapest %}&#8369;{{ cheapest.price|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}
+    </p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">
+      {% if cheapest %}{{ cheapest.seller }} · {{ cheapest.trust_label|lower }}{% else %}Nothing recorded{% endif %}
+    </p>
+  </div>
+</div>
+
+{% if cheapest_is_untrusted %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">
+      The cheapest listing is not one you have verified
+    </p>
+    <p class="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
+      {{ cheapest.seller }} is &#8369;{{ cheapest.price|floatformat:0|intcomma }} against
+      &#8369;{{ best_trusted.price|floatformat:0|intcomma }} at {{ best_trusted.seller }}.
+      On a product like this, a gap that size is as likely to mean a different shoe as
+      a better deal &mdash; which is exactly why the list below groups by who the
+      seller is before it sorts by price.
+    </p>
+  </div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-header">
+    <div class="min-w-0">
+      <p class="eyebrow">Prices found</p>
+      <p class="text-sm font-bold text-ink dark:text-white">Grouped by who is selling</p>
+    </div>
+  </div>
+
+  {% if quotes %}
+    <div class="table-wrap rounded-t-none border-0">
+      <table class="table min-w-[720px]">
+        <thead>
+          <tr>
+            <th>Seller</th><th>Trust</th>
+            <th class="text-right">Price</th>
+            <th>Size</th><th>Seen</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for quote in quotes %}
+            <tr class="{% if not quote.in_stock %}opacity-60{% endif %}">
+              <td>
+                {% if quote.url %}
+                  <a href="{{ quote.url }}" target="_blank" rel="noopener nofollow"
+                     class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                    {{ quote.seller }}
+                  </a>
+                {% else %}
+                  <span class="font-bold text-ink dark:text-slate-200">{{ quote.seller }}</span>
+                {% endif %}
+                {% if quote.warning %}
+                  <span class="mt-1 block text-[11px] font-bold text-red-600 dark:text-red-400">
+                    domain looks like {{ quote.warning.resembles }} but is not the brand
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="{{ quote.badge_class }}">{{ quote.trust_label }}</span>
+              </td>
+              <td class="whitespace-nowrap text-right mono font-bold">
+                &#8369;{{ quote.price|floatformat:0|intcomma }}
+                {% if not quote.in_stock %}
+                  <span class="block text-[11px] font-normal text-ink-muted">out of stock</span>
+                {% endif %}
+              </td>
+              <td class="text-[12px]">{{ quote.size|default:"&mdash;" }}</td>
+              <td class="whitespace-nowrap text-[12px]">{{ quote.seen_on|date:"d M Y" }}</td>
+              <td class="text-[11px] text-ink-muted dark:text-slate-500">{{ quote.trust_note }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="panel-pad">
+      <p class="text-sm text-ink-muted dark:text-slate-400">
+        No prices yet. Add the first one from the form beside this.
+      </p>
+    </div>
+  {% endif %}
+</div>
+
+<div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+  <div class="panel panel-pad">
+    <p class="eyebrow">Why this is not a price search</p>
+    <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      No Philippine retailer publishes product prices in any machine-readable form.
+      Shopee and Lazada expose seller-side APIs only, and the brands' own stores are
+      client-rendered with no product schema &mdash; Salomon PH's page carries a single
+      Organization block and prices as loose text not tied to any model. Scraping it
+      would break on the next redesign and, worse, would sometimes report the wrong
+      shoe's price with complete confidence.
+    </p>
+    <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      So this remembers what <em>you</em> find, and does the part software is good at:
+      keeping track of which seller is which, and noticing when a domain is wearing a
+      brand's name without being the brand.
+    </p>
+    {% if stale %}
+      <p class="mt-3 text-[13px] font-semibold text-amber-700 dark:text-amber-400">
+        {{ stale|length }} of these prices are over a month old. Clothing moves with
+        the season, so treat them as memories rather than offers.
+      </p>
+    {% endif %}
+  </div>
+
+  <form method="post" class="panel min-w-0">
+    {% csrf_token %}
+    <div class="panel-header">
+      <div class="min-w-0">
+        <p class="eyebrow">Add</p>
+        <p class="text-sm font-bold text-ink dark:text-white">A price you found</p>
+      </div>
+    </div>
+    <div class="panel-pad space-y-4">
+      {% include "partials/_field.html" with field=form.seller %}
+      {% include "partials/_field.html" with field=form.url %}
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=form.price %}
+        {% include "partials/_field.html" with field=form.size %}
+      </div>
+      {% include "partials/_field.html" with field=form.trust %}
+      {% include "partials/_field.html" with field=form.seen_on %}
+      {% include "partials/_field.html" with field=form.in_stock %}
+      <button type="submit" class="btn-primary w-full">Save price</button>
+      <p class="text-[11px] leading-relaxed text-ink-muted dark:text-slate-500">
+        Paste the link and the app will recognise the brand's own domain or a known
+        marketplace by itself. Everything else stays unverified until you say
+        otherwise &mdash; a reassuring badge on a seller nobody checked would be worse
+        than none.
+      </p>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -12,6 +12,7 @@ presented as a fact.
 | **Where to buy** | What is near me, what I paid there, what promos are running |
 | **Spending** | Where the money went, and did the lines add up |
 | **Promos** | What is running, and more importantly what has expired |
+| **Product watch** | Who legitimately sells this, and at what price |
 | **Wardrobe** | Was that jacket worth it — cost per wear |
 | **Card promos** | Which banks are running offers, and where |
 | **Today** | What the app has worked out from my own history |
@@ -401,6 +402,45 @@ Two deliberate refinements:
 
 Where the DA tracks the item, its regional price appears as a benchmark for what
 a fair ask looks like — explicitly not a shelf price.
+
+### Product watch — the counterfeit problem
+
+**Spend → Product watch** tracks a specific item — *Salomon XT-6 Gore-Tex*, not
+"shoes" — across sellers.
+
+**It does not search the web for prices, and will not pretend to.** No Philippine
+retailer publishes product prices in any machine-readable form: Shopee and Lazada
+expose seller-side APIs only, and the brands' own stores are client-rendered with
+no product schema. Salomon PH's page carries a single `Organization` JSON-LD
+block and prices as loose text not bound to any SKU. Scraping it would break on
+the next redesign and would sometimes report the wrong shoe's price with total
+confidence.
+
+What it does instead is the part software is actually good at: **keeping the
+sellers straight.**
+
+Prices are grouped by **who is selling** before they are sorted by price:
+
+| Tier | Meaning | Set by |
+|---|---|---|
+| Brand's own store | Domain verified against the brand | Auto-detected |
+| Authorised stockist | The brand recognises them | **You**, after checking |
+| Marketplace seller | Shopee/Lazada — genuine and fake side by side | Auto-detected |
+| Unverified | Nobody has checked | Default |
+
+The app only ever auto-assigns the two it can verify. It never upgrades an
+unknown seller on its own, because a reassuring badge on a seller nobody checked
+is worse than no badge.
+
+**Lookalike domain detection.** Searching for a Salomon XT-6 in the Philippines
+returns `ph.salomon.com` and `salomophilippines.com` side by side — one is the
+brand, the other is a misspelling. The app flags a domain whose name is a
+near-miss of the brand's. It compares the start of the hostname as well as the
+whole of it: `salomophilippines` scores only 0.58 against `salomon` as a whole
+word, but its first six characters score 0.92.
+
+Sorting purely on price would put a ₱5,999 unverified listing above the brand's
+own ₱12,990 — which reads as a recommendation to buy the suspicious one.
 
 ### Today — the briefing
 

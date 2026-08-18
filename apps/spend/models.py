@@ -301,3 +301,99 @@ class Promo(models.Model):
         quietly ended.
         """
         return self.ends_on is None
+
+
+class Product(models.Model):
+    """A specific thing you want, tracked across sellers.
+
+    Deliberately model-level, not category-level: "Salomon XT-6 Gore-Tex" is
+    the question, and a shoe is not interchangeable with another shoe the way a
+    litre of RON 95 is with another litre.
+    """
+
+    brand = models.CharField(max_length=60, db_index=True)
+    model = models.CharField(max_length=120)
+    variant = models.CharField(
+        max_length=120, blank=True, help_text='e.g. "Gore-Tex", "Black/Phantom".'
+    )
+
+    target_price = models.DecimalField(
+        max_digits=9, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="What you would happily pay. Used to flag a good find.",
+    )
+    notes = models.CharField(max_length=200, blank=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "model", "variant"], name="uniq_product_identity"
+            )
+        ]
+        ordering = ["brand", "model", "variant"]
+
+    def __str__(self) -> str:
+        return self.label
+
+    @property
+    def label(self) -> str:
+        return " ".join(p for p in (self.brand, self.model, self.variant) if p)
+
+
+class ProductPrice(models.Model):
+    """A price seen for a product at one seller, on one day.
+
+    Entered by hand because no Philippine retailer publishes product prices in
+    any machine-readable form. The trust tier matters as much as the number:
+    a cheap price from an unverified seller is not a bargain, it is a question.
+    """
+
+    class Trust(models.TextChoices):
+        OFFICIAL = "official", "Brand's own store"
+        AUTHORISED = "authorised", "Authorised stockist"
+        MARKETPLACE = "marketplace", "Marketplace seller"
+        UNVERIFIED = "unverified", "Unverified"
+
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="quotes"
+    )
+    seller = models.CharField(max_length=120)
+    url = models.URLField(blank=True)
+
+    price = models.DecimalField(
+        max_digits=9, decimal_places=2, validators=[MinValueValidator(0)]
+    )
+    size = models.CharField(max_length=40, blank=True)
+    in_stock = models.BooleanField(default=True)
+
+    trust = models.CharField(
+        max_length=12, choices=Trust.choices, default=Trust.UNVERIFIED,
+        help_text="How far this seller can be trusted. Yours to set - the app "
+                  "only auto-detects the brand's own domains and the known "
+                  "marketplaces.",
+    )
+    seen_on = models.DateField(default=timezone.localdate)
+    notes = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["price"]
+        indexes = [
+            models.Index(fields=["product", "price"], name="idx_quote_product"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product} at {self.seller}: {self.price}"
+
+    @property
+    def is_trusted(self) -> bool:
+        return self.trust in {self.Trust.OFFICIAL, self.Trust.AUTHORISED}
+
+    @property
+    def is_stale(self) -> bool:
+        """Older than a month.
+
+        Clothing prices move with the season and with sales, so an old quote is
+        a memory rather than an offer.
+        """
+        return (timezone.localdate() - self.seen_on).days > 30

@@ -12,9 +12,9 @@ from apps.core.categories import SpendCategory
 from apps.core.tables import Column, build_list_table, build_table
 from apps.core.views import module
 
-from .forms import ItemForm, PromoForm, PurchaseForm
+from .forms import ItemForm, ProductForm, ProductPriceForm, PromoForm, PurchaseForm
 from .shopping import CATEGORY_KINDS, reference_price, where_to_buy
-from .models import Promo, Purchase, PurchaseItem
+from .models import Product, ProductPrice, Promo, Purchase, PurchaseItem
 from .services import (
     card_promos_at,
     expiring_promos,
@@ -276,3 +276,86 @@ def where(request):
         "priced": [o for o in options if o.has_price],
         "with_promos": [o for o in options if o.promos],
     })
+
+
+@login_required
+@module("spend_products", "Products")
+def products(request):
+    if request.method == "POST":
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            product = form.save()
+            messages.success(request, f"Tracking {product.label}.")
+            return redirect("spend:product_detail", pk=product.pk)
+        messages.error(request, "Check the highlighted fields.")
+    else:
+        form = ProductForm(initial={"brand": request.GET.get("brand", "")})
+
+    tracked = Product.objects.prefetch_related("quotes")
+    for product in tracked:
+        quotes = list(product.quotes.all())
+        product.quote_count = len(quotes)
+        trusted = [q for q in quotes if q.is_trusted and q.in_stock]
+        product.best_trusted = min(trusted, key=lambda q: q.price) if trusted else None
+
+    return render(request, "spend/products.html", {
+        "products": tracked,
+        "form": form,
+    })
+
+
+@login_required
+@module("spend_products", "Product")
+def product_detail(request, pk: int):
+    product = get_object_or_404(Product.objects.prefetch_related("quotes"), pk=pk)
+    request.page_title = product.label
+
+    if request.method == "POST":
+        form = ProductPriceForm(request.POST, product=product)
+        if form.is_valid():
+            quote = form.save(commit=False)
+            quote.product = product
+            quote.save()
+            messages.success(request, "Price recorded.")
+            return redirect("spend:product_detail", pk=product.pk)
+        messages.error(request, "Check the highlighted fields.")
+    else:
+        form = ProductPriceForm(product=product)
+
+    from .products import Quote, best_trusted, cheapest_overall, lookalike_warning, rank_quotes
+
+    quotes = [
+        Quote(
+            seller=q.seller, url=q.url, price=q.price, trust=q.trust,
+            seen_on=q.seen_on, in_stock=q.in_stock, size=q.size,
+            warning=lookalike_warning(q.url, product.brand),
+        )
+        for q in product.quotes.all()
+    ]
+    ranked = rank_quotes(quotes)
+    trusted = best_trusted(quotes)
+    cheapest = cheapest_overall(quotes)
+
+    return render(request, "spend/product_detail.html", {
+        "product": product,
+        "form": form,
+        "quotes": ranked,
+        "best_trusted": trusted,
+        "cheapest": cheapest,
+        # The case worth naming: the cheapest listing is not one you can trust.
+        "cheapest_is_untrusted": (
+            cheapest is not None and trusted is not None
+            and cheapest.price < trusted.price and not cheapest.is_trusted
+        ),
+        "warnings": [q.warning for q in quotes if q.warning],
+        "stale": [q for q in product.quotes.all() if q.is_stale],
+    })
+
+
+@login_required
+@require_POST
+def product_delete(request, pk: int):
+    product = get_object_or_404(Product, pk=pk)
+    product.delete()
+    messages.success(request, "Stopped tracking.")
+    return redirect("spend:products")
