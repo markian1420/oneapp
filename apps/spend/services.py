@@ -118,24 +118,29 @@ def live_promos(category: str = "", brand: str = "", *,
     return promos
 
 
-def expiring_promos(within_days: int = 3) -> list[Promo]:
+def expiring_promos(within_days: int = 3, *,
+                    card_promos: bool | None = None) -> list[Promo]:
     return [
-        p for p in live_promos()
+        p for p in live_promos(card_promos=card_promos)
         if p.days_left is not None and p.days_left <= within_days
     ]
 
 
-def stale_promos(older_than_days: int = 60) -> list[Promo]:
-    """Undated promos entered long ago.
+def stale_promos(older_than_days: int = 60, *,
+                 card_promos: bool | None = None) -> list[Promo]:
+    """Undated promos first seen long ago.
 
     Not expired - nobody knows - but old enough that trusting them is a
     gamble. Prompting a review is more honest than showing them as live for
     ever.
     """
     cutoff = timezone.now() - timedelta(days=older_than_days)
-    return [
-        p for p in Promo.objects.filter(ends_on__isnull=True, added_at__lt=cutoff)
-    ]
+    queryset = Promo.objects.filter(ends_on__isnull=True, added_at__lt=cutoff)
+    if card_promos is True:
+        queryset = queryset.exclude(issuer="")
+    elif card_promos is False:
+        queryset = queryset.filter(issuer="")
+    return list(queryset)
 
 
 def wardrobe(limit: int | None = None) -> list[PurchaseItem]:

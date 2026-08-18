@@ -8,14 +8,13 @@
 
 {% block content %}
 <div class="panel panel-pad mb-5">
-  <p class="eyebrow">Why these are typed in by hand</p>
+  <p class="eyebrow">Where these come from</p>
   <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-    No Philippine chain publishes promos in any machine-readable form. The brand
-    pages are images with the terms baked into the graphic and no validity dates in
-    text, and the deal blogs grant no reuse licence. So this is a notebook, not a
-    feed &mdash; and the field that matters most is the one nobody publishes:
-    <strong class="text-ink dark:text-white">when it ends</strong>. A promo tracker
-    showing expired offers is worse than no tracker at all.
+    This screen is read-only. Anything on it was pulled from what the merchant
+    published, not typed in here &mdash; which is what keeps the dates worth trusting.
+    The field that matters most is
+    <strong class="text-ink dark:text-white">when it ends</strong>, and a tracker still
+    showing offers that quietly expired is worse than no tracker at all.
   </p>
 </div>
 
@@ -37,148 +36,113 @@
   <div class="panel panel-pad mb-5">
     <p class="eyebrow">Worth re-checking</p>
     <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-      {{ stale|length }} promo{{ stale|pluralize }} with no end date, added over two
+      {{ stale|length }} promo{{ stale|pluralize }} with no end date, first seen over two
       months ago. Nobody knows whether they are still running &mdash; which is exactly
       why they are the ones most likely to have quietly ended.
     </p>
   </div>
 {% endif %}
 
-<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+<div class="space-y-5">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="min-w-0">
+        <p class="eyebrow">Running now</p>
+        <p class="text-sm font-bold text-ink dark:text-white">Live promos</p>
+      </div>
+      <form method="get">
+        <select name="category" class="form-control min-h-[34px] w-auto py-1 text-xs" data-autosubmit>
+          <option value="">All categories</option>
+          {% for value, label in categories %}
+            <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
 
-  <section class="min-w-0 space-y-5">
+    {% if live %}
+      <div class="panel-pad grid gap-3 lg:grid-cols-2">
+        {% for promo in live %}
+          <div class="rounded-[var(--radius-control)] border border-slate-200 p-3 dark:border-night-line">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-ink dark:text-white">{{ promo.title }}</p>
+                <p class="mt-0.5 text-[12px] text-ink-muted dark:text-slate-400">
+                  {% if promo.brand %}{{ promo.brand }} · {% endif %}{{ promo.get_category_display }}
+                  {% if promo.detail %} · {{ promo.detail }}{% endif %}
+                </p>
+              </div>
+              <span class="{{ promo.badge_class }} shrink-0">
+                {% if promo.undated %}No end date
+                {% elif promo.days_left == 0 %}Ends today
+                {% else %}{{ promo.days_left }}d left{% endif %}
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              {% if promo.discount_pct %}
+                <span class="text-lg font-black text-brand-700 dark:text-brand-400">{{ promo.discount_pct|floatformat:"-2" }}% off</span>
+              {% endif %}
+              {% if promo.price %}
+                <span class="text-lg font-black text-brand-700 dark:text-brand-400">&#8369;{{ promo.price|floatformat:"-2" }}</span>
+              {% endif %}
+              {% if promo.min_spend %}
+                <span class="text-[12px] font-bold text-ink-muted dark:text-slate-500">min &#8369;{{ promo.min_spend|floatformat:0 }}</span>
+              {% endif %}
+              {% if promo.source_url %}
+                <a href="{{ promo.source_url }}" target="_blank" rel="noopener"
+                   class="text-[12px] font-bold text-brand-700 underline dark:text-brand-400">source</a>
+              {% elif promo.source_note %}
+                <span class="text-[12px] text-ink-muted dark:text-slate-500">{{ promo.source_note }}</span>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="panel-pad">
+        <p class="text-sm text-ink-muted dark:text-slate-400">
+          Nothing here, and honestly nothing is likely to be for a while. No Philippine
+          chain publishes its promos in any machine-readable form &mdash; the brand pages
+          are images with the terms baked into the graphic and no validity dates in text,
+          and the deal blogs grant no reuse licence. Rather than fill this with guesses,
+          it stays empty until a merchant publishes something worth reading.
+        </p>
+        {% if card_promo_count %}
+          <p class="mt-3 text-sm text-ink-muted dark:text-slate-400">
+            The banks do publish, though.
+          </p>
+          <a href="{% url 'spend:card_promos' %}" class="btn-primary btn-sm mt-3">
+            See {{ card_promo_count }} card promo{{ card_promo_count|pluralize }}
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if expired %}
     <div class="panel">
       <div class="panel-header">
         <div class="min-w-0">
-          <p class="eyebrow">Running now</p>
-          <p class="text-sm font-bold text-ink dark:text-white">Live promos</p>
+          <p class="eyebrow">Finished</p>
+          <p class="text-sm font-bold text-ink dark:text-white">Past promos</p>
         </div>
-        <form method="get">
-          <select name="category" class="form-control min-h-[34px] w-auto py-1 text-xs" data-autosubmit>
-            <option value="">All categories</option>
-            {% for value, label in categories %}
-              <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+      </div>
+      <div class="table-wrap rounded-t-none border-0">
+        <table class="table min-w-[420px]">
+          <thead><tr><th>Promo</th><th>Brand</th><th>Ended</th></tr></thead>
+          <tbody>
+            {% for promo in expired %}
+              <tr class="opacity-70">
+                <td>{{ promo.title }}</td>
+                <td>{{ promo.brand|default:"—" }}</td>
+                <td class="whitespace-nowrap text-[12px]">{{ promo.ends_on|date:"d M Y"|default:"—" }}</td>
+              </tr>
             {% endfor %}
-          </select>
-        </form>
+          </tbody>
+        </table>
       </div>
-
-      {% if live %}
-        <div class="panel-pad space-y-3">
-          {% for promo in live %}
-            <div class="rounded-[var(--radius-control)] border border-slate-200 p-3 dark:border-night-line">
-              <div class="flex flex-wrap items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-sm font-bold text-ink dark:text-white">{{ promo.title }}</p>
-                  <p class="mt-0.5 text-[12px] text-ink-muted dark:text-slate-400">
-                    {% if promo.brand %}{{ promo.brand }} · {% endif %}{{ promo.get_category_display }}
-                    {% if promo.detail %} · {{ promo.detail }}{% endif %}
-                  </p>
-                </div>
-                <span class="{{ promo.badge_class }} shrink-0">
-                  {% if promo.undated %}No end date
-                  {% elif promo.days_left == 0 %}Ends today
-                  {% else %}{{ promo.days_left }}d left{% endif %}
-                </span>
-              </div>
-
-              <div class="mt-2 flex flex-wrap items-center gap-3">
-                {% if promo.discount_pct %}
-                  <span class="text-lg font-black text-brand-700 dark:text-brand-400">{{ promo.discount_pct|floatformat:"-2" }}% off</span>
-                {% endif %}
-                {% if promo.price %}
-                  <span class="text-lg font-black text-brand-700 dark:text-brand-400">&#8369;{{ promo.price|floatformat:"-2" }}</span>
-                {% endif %}
-                {% if promo.min_spend %}
-                  <span class="text-[12px] font-bold text-ink-muted dark:text-slate-500">min &#8369;{{ promo.min_spend|floatformat:0 }}</span>
-                {% endif %}
-                {% if promo.source_url %}
-                  <a href="{{ promo.source_url }}" target="_blank" rel="noopener"
-                     class="text-[12px] font-bold text-brand-700 underline dark:text-brand-400">source</a>
-                {% elif promo.source_note %}
-                  <span class="text-[12px] text-ink-muted dark:text-slate-500">{{ promo.source_note }}</span>
-                {% endif %}
-
-                <form method="post" action="{% url 'spend:promo_delete' promo.pk %}" class="ml-auto"
-                      data-confirm="Remove this promo?">
-                  {% csrf_token %}
-                  <button type="submit" class="btn-ghost btn-sm text-red-600 dark:text-red-400">Remove</button>
-                </form>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="panel-pad">
-          <p class="text-sm text-ink-muted dark:text-slate-400">
-            Nothing running. Add one when you see a poster &mdash; it takes fifteen seconds,
-            and it is the only way this module gets any data at all.
-          </p>
-        </div>
-      {% endif %}
     </div>
-
-    {% if expired %}
-      <div class="panel">
-        <div class="panel-header">
-          <div class="min-w-0">
-            <p class="eyebrow">Finished</p>
-            <p class="text-sm font-bold text-ink dark:text-white">Past promos</p>
-          </div>
-        </div>
-        <div class="table-wrap rounded-t-none border-0">
-          <table class="table min-w-[420px]">
-            <thead><tr><th>Promo</th><th>Brand</th><th>Ended</th></tr></thead>
-            <tbody>
-              {% for promo in expired %}
-                <tr class="opacity-70">
-                  <td>{{ promo.title }}</td>
-                  <td>{{ promo.brand|default:"—" }}</td>
-                  <td class="whitespace-nowrap text-[12px]">{{ promo.ends_on|date:"d M Y"|default:"—" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    {% endif %}
-  </section>
-
-  <aside class="min-w-0">
-    <form method="post" class="panel min-w-0">
-      {% csrf_token %}
-      <div class="panel-header">
-        <div class="min-w-0">
-          <p class="eyebrow">Add</p>
-          <p class="text-sm font-bold text-ink dark:text-white">Saw a promo</p>
-        </div>
-      </div>
-      <div class="panel-pad space-y-4">
-        {% if form.non_field_errors %}
-          <div class="rounded-[var(--radius-control)] border border-red-300 bg-red-50 px-4 py-3
-                      text-sm font-semibold text-red-800
-                      dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
-          </div>
-        {% endif %}
-
-        {% include "partials/_field.html" with field=form.title %}
-        <div class="grid gap-4 sm:grid-cols-2">
-          {% include "partials/_field.html" with field=form.brand %}
-          {% include "partials/_field.html" with field=form.category %}
-          {% include "partials/_field.html" with field=form.discount_pct %}
-          {% include "partials/_field.html" with field=form.price %}
-          {% include "partials/_field.html" with field=form.min_spend %}
-          {% include "partials/_field.html" with field=form.starts_on %}
-        </div>
-        {% include "partials/_field.html" with field=form.ends_on %}
-        {% include "partials/_field.html" with field=form.detail %}
-        {% include "partials/_field.html" with field=form.source_note %}
-        {% include "partials/_field.html" with field=form.source_url %}
-
-        <button type="submit" class="btn-primary w-full">Save promo</button>
-      </div>
-    </form>
-  </aside>
+  {% endif %}
 </div>
 {% endblock %}

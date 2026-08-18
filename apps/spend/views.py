@@ -6,13 +6,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.categories import SpendCategory
 from apps.core.tables import Column, build_list_table, build_table
 from apps.core.views import module
 
-from .forms import ItemForm, ProductForm, ProductPriceForm, PromoForm, PurchaseForm
+from .forms import ItemForm, ProductForm, ProductPriceForm, PurchaseForm
 from .shopping import CATEGORY_KINDS, reference_price, where_to_buy
 from .models import Product, ProductPrice, Promo, Purchase, PurchaseItem
 from .services import (
@@ -145,44 +145,35 @@ def wardrobe_screen(request):
 
 
 @login_required
+@require_GET
 @module("spend_promos", "Promos")
 def promos(request):
+    """A read-only view of what the issuers published.
+
+    Nothing here is hand-entered. The importer keys on (issuer, source_ref), so
+    anything typed or deleted here would be overwritten by the next refresh
+    anyway.
+    """
     category = request.GET.get("category", "")
     if category not in SpendCategory.values:
         category = ""
 
-    if request.method == "POST":
-        form = PromoForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Promo saved.")
-            return redirect("spend:promos")
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = PromoForm()
-
-    live = live_promos(category=category)
+    # Merchant promos only. Card promos have their own screen, with a pager -
+    # letting all 675 of them through here rendered the same list twice, once
+    # unpaged.
+    live = live_promos(category=category, card_promos=False)
 
     return render(request, "spend/promos.html", {
-        "form": form,
         "live": live,
-        "issuers": issuers(),
-        "expiring": expiring_promos(),
-        "stale": stale_promos(),
-        "expired": [p for p in Promo.objects.all() if not p.is_live][:20],
+        "expiring": expiring_promos(card_promos=False),
+        "stale": stale_promos(card_promos=False),
+        "expired": [
+            p for p in Promo.objects.filter(issuer="") if not p.is_live
+        ][:20],
         "categories": SpendCategory.choices,
         "category": category,
-        "undated": [p for p in live if p.undated],
+        "card_promo_count": len(live_promos(card_promos=True)),
     })
-
-
-@login_required
-@require_POST
-def promo_delete(request, pk: int):
-    promo = get_object_or_404(Promo, pk=pk)
-    promo.delete()
-    messages.success(request, "Promo removed.")
-    return redirect("spend:promos")
 
 
 @login_required

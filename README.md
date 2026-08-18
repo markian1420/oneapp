@@ -52,8 +52,8 @@ varies enormously. This table is the single most useful thing in this file:
 | **Supermarket SKUs** | None | — | Your receipts only |
 | **Dining** | None | — | Your receipts only |
 | **Apparel** | None | — | Cost per wear |
-| **Promos** | None at all | — | Typed in by hand |
-| **Card promos** | **Metrobank publishes structured JSON** | Continuous | Typed in by hand |
+| **Merchant promos** | None at all | — | — |
+| **Card promos** | **Metrobank publishes structured JSON** | Continuous | — |
 
 Verified rather than assumed: the DOE per-station dashboard on
 `legacy.doe.gov.ph` no longer resolves, `doe.gov.ph/e-presyo` returns HTTP 500,
@@ -426,8 +426,8 @@ Genki Sushi), it is filed under that place's real category rather than the bank'
 looser label.
 
 BPI publishes "Valid until" as plain text too, so it is a good candidate for the
-next importer. Merchant promos remain hand-entered — their terms are baked into
-graphics.
+next importer. Merchant chains remain the gap: their terms are baked into
+graphics, so nothing can read them.
 
 A purchase records **how** you paid as free text ("BPI credit", "cash", "GCash").
 That is a note for grouping spend by payment method, not card data.
@@ -438,10 +438,18 @@ That is a note for grouping spend by payment method, not card data.
 because litres and odometer readings mean something specific, but it is counted
 in the category totals.
 
-**Spend → Promos** is a notebook, not a feed — nothing in the Philippines
-publishes promos machine-readably. The field the form pushes hardest on is the
-one nobody publishes: when it ends. Undated promos sort last and get flagged for
-review after two months.
+**Spend → Promos** covers merchant chains, and is **read-only**. There is
+deliberately no way to type one in. Every promo importer upserts on
+`(issuer, source_ref)`, so a hand-typed or hand-deleted row would be overwritten
+on the next refresh — a button that quietly undoes itself is worse than no
+button. Undated promos sort last and get flagged for review after two months,
+since those are the ones most likely to have ended without saying so.
+
+Right now the screen is **empty, and says why**: no Philippine chain publishes
+promos in any machine-readable form, so there is nothing honest to put on it. It
+points at Card promos, where the banks do publish. Card promos are excluded here
+rather than duplicated — showing all 675 of them on both screens meant rendering
+the paged list a second time, unpaged.
 
 **Spend → Wardrobe** tracks cost per wear. Tick *track wears* on a clothing line,
 then tap *Wore it* when you use it. Unworn items lead the list.

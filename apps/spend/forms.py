@@ -1,4 +1,4 @@
-"""Forms for logging spend and recording offers."""
+"""Forms for logging spend and tracking products."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.fuel.forms import DateTimeLocalInput
 from apps.places.models import Place
 
-from .models import Product, ProductPrice, Promo, Purchase, PurchaseItem
+from .models import Product, ProductPrice, Purchase, PurchaseItem
 
 
 class PurchaseForm(forms.ModelForm):
@@ -82,56 +82,6 @@ class ItemForm(forms.ModelForm):
         if cleaned.get("amount") is None:
             raise forms.ValidationError(
                 "Give a line total, or a unit price and a quantity."
-            )
-        return cleaned
-
-
-class PromoForm(forms.ModelForm):
-    class Meta:
-        model = Promo
-        fields = [
-            "title", "brand", "issuer", "card_name", "category", "detail",
-            "discount_pct", "price", "min_spend",
-            "starts_on", "ends_on", "source_url", "source_note",
-        ]
-        widgets = {
-            "starts_on": forms.DateInput(attrs={"type": "date"}),
-            "ends_on": forms.DateInput(attrs={"type": "date"}),
-        }
-        labels = {
-            "discount_pct": "Discount (%)",
-            "price": "Fixed price (₱)",
-            "min_spend": "Minimum spend (₱)",
-            "starts_on": "Starts",
-            "ends_on": "Ends",
-            "source_note": "Where you saw it",
-            "issuer": "Bank (for a card promo)",
-            "card_name": "Which card",
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        brands = (
-            Place.objects.exclude(brand="")
-            .values_list("brand", flat=True).order_by("brand").distinct()
-        )
-        self.fields["brand"] = forms.ChoiceField(
-            required=False,
-            choices=[("", "Any brand")] + [(b, b) for b in brands],
-        )
-        self.fields["ends_on"].help_text = (
-            "The most important field here. Brands rarely publish it, so if the "
-            "poster does not say, put your best guess rather than nothing."
-        )
-
-    def clean(self):
-        cleaned = super().clean()
-        starts, ends = cleaned.get("starts_on"), cleaned.get("ends_on")
-        if starts and ends and ends < starts:
-            self.add_error("ends_on", "The end date is before the start date.")
-        if not cleaned.get("discount_pct") and not cleaned.get("price"):
-            self.add_error(
-                "discount_pct", "Give a discount or a fixed price, or it says nothing."
             )
         return cleaned
 

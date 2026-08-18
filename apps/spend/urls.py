@@ -17,5 +17,4 @@ urlpatterns = [
     path("products/<int:pk>/delete/", views.product_delete, name="product_delete"),
     path("promos/", views.promos, name="promos"),
     path("card-promos/", views.card_promos, name="card_promos"),
-    path("promos/<int:pk>/delete/", views.promo_delete, name="promo_delete"),
 ]

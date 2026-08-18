@@ -224,6 +224,46 @@ class SpendScreenTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
+    def test_promos_are_read_only(self):
+        """Nothing on this screen is hand-managed.
+
+        Promos come from what the issuer published, and the importer keys on
+        (issuer, source_ref) - so a promo removed here would simply reappear on
+        the next refresh. Better to have no such button than one that quietly
+        undoes itself.
+        """
+        response = self.client.get(reverse("spend:promos"))
+
+        self.assertNotIn("form", response.context)
+        self.assertNotContains(response, "Save promo")
+        self.assertEqual(
+            self.client.post(reverse("spend:promos"), {"title": "Typed in"}).status_code,
+            405,
+        )
+        self.assertFalse(Promo.objects.exists())
+
+    def test_card_promos_are_not_duplicated_onto_the_merchant_screen(self):
+        """Card promos live on their own screen, which pages them.
+
+        Letting them through here meant rendering the same 675 rows twice, the
+        second time with no pager at all.
+        """
+        Promo.objects.create(
+            title="Metrobank dining deal", issuer="Metrobank",
+            category=SpendCategory.DINING, discount_pct=Decimal("15"),
+            ends_on=timezone.localdate() + timedelta(days=5),
+        )
+        Promo.objects.create(
+            title="Store sale", category=SpendCategory.APPAREL,
+            discount_pct=Decimal("30"),
+            ends_on=timezone.localdate() + timedelta(days=5),
+        )
+
+        response = self.client.get(reverse("spend:promos"))
+
+        self.assertEqual([p.title for p in response.context["live"]], ["Store sale"])
+        self.assertEqual(response.context["card_promo_count"], 1)
+
     def test_recording_a_wear_increments_it(self):
         purchase = make_purchase(category=SpendCategory.APPAREL)
         item = PurchaseItem.objects.create(
