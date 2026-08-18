@@ -46,7 +46,7 @@ varies enormously. This table is the single most useful thing in this file:
 
 | Category | Official feed | Cadence | Fallback |
 |---|---|---|---|
-| **Fuel** | DOE weekly advisory (brand + region), **GasWatch PH survey** | Weekly | Your receipts |
+| **Fuel** | DOE advisory, **GasWatch survey**, **MetroFuel brand averages** | Weekly / daily | Your receipts |
 | **Grocery commodities** | **DA Daily Price Index (NCR)** | **Daily** | — |
 | **Packaged goods** | DTI SRP bulletin | Occasional | Your receipts |
 | **Supermarket SKUs** | None | — | Your receipts only |
@@ -304,6 +304,42 @@ entire argument for comparing stations, in real numbers.
 
 GasWatch states no reuse licence, so this is for personal use, and every row
 records the source.
+
+### Fuel brand averages, from MetroFuel Tracker
+
+Complements the GasWatch band rather than replacing it. GasWatch gives a Metro
+Manila price range across five grades but no brand; MetroFuel publishes
+**per-brand averages**, which is what the price resolver actually wants — a Shell
+station getting Shell's number instead of the region's median.
+
+```powershell
+.\.venv\Scripts\python.exe manage.py import_metrofuel
+```
+
+That took **766 of 1,059 stations from Estimated to brand-level Advisory**, and
+the brand differences are real:
+
+| Brand | Diesel | Unleaded 91 | Stations |
+|---|---|---|---|
+| Flying V | ₱87.41 | ₱76.52 | 208 |
+| Jetti | ₱87.54 | ₱76.79 | 105 |
+| Seaoil | ₱88.81 | ₱77.53 | 371 |
+| Petron | ₱89.92 | ₱78.27 | 1,017 |
+| Shell | ₱92.12 | ₱80.08 | 755 |
+| Caltex | ₱92.31 | ₱80.99 | 436 |
+
+**Read only from `/prices`, which their `robots.txt` allows.** Their `/api/` is
+explicitly `Disallow`ed and is never touched — the page renders everything
+server-side, so there is no need to go near it.
+
+Two limits, both carried into the UI: the averages are **national** across 153
+cities, so they are a brand signal rather than a local one; and only diesel and
+unleaded 91 are published per brand, so 95 and 97 still fall back to the GasWatch
+regional band.
+
+**Cleanfuel is listed with 83 stations and no published prices.** A parser that
+took "the next two numbers after the brand" would hand it PTT's figures silently,
+so the parser anchors on the next *brand* instead and reports the gap out loud.
 
 ### Grocery commodity prices, from the DA
 
