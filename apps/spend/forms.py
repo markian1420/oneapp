@@ -18,7 +18,7 @@ class PurchaseForm(forms.ModelForm):
         model = Purchase
         fields = [
             "place", "merchant", "category", "occurred_at",
-            "total", "card", "reward_earned", "notes",
+            "total", "paid_with", "reward_earned", "notes",
         ]
         widgets = {
             "occurred_at": DateTimeLocalInput(),
@@ -28,7 +28,7 @@ class PurchaseForm(forms.ModelForm):
             "place": "Where (on the map)",
             "merchant": "Or type a name",
             "total": "Total paid",
-            "card": "Paid with",
+            "paid_with": "Paid with",
             "reward_earned": "Reward earned",
         }
 
@@ -90,7 +90,7 @@ class PromoForm(forms.ModelForm):
     class Meta:
         model = Promo
         fields = [
-            "title", "brand", "category", "detail",
+            "title", "brand", "issuer", "card_name", "category", "detail",
             "discount_pct", "price", "min_spend",
             "starts_on", "ends_on", "source_url", "source_note",
         ]
@@ -105,6 +105,8 @@ class PromoForm(forms.ModelForm):
             "starts_on": "Starts",
             "ends_on": "Ends",
             "source_note": "Where you saw it",
+            "issuer": "Bank (for a card promo)",
+            "card_name": "Which card",
         }
 
     def __init__(self, *args, **kwargs):

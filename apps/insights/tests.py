@@ -16,7 +16,6 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.cards.models import Card, Reward
 from apps.core.categories import SpendCategory
 from apps.fuel.models import FillUp, Vehicle
 from apps.grocery.models import Commodity, CommodityCategory, CommodityPrice
@@ -26,7 +25,7 @@ from apps.spend.models import Promo, Purchase, PurchaseItem
 from .services import (
     REQUIREMENTS,
     build_briefing,
-    card_leakage,
+    card_promo_coverage,
     fuel_rhythm,
     grocery_swing,
     idle_wardrobe,
@@ -94,35 +93,30 @@ class ConfidenceTests(TestCase):
         self.assertEqual(fuel_rhythm().confidence, "solid")
 
 
-class CardLeakageTests(TestCase):
-    def setUp(self):
-        self.best = Card.objects.create(name="Grocery card")
-        Reward.objects.create(card=self.best, rate=Decimal("5"),
-                              category=SpendCategory.GROCERY)
-        self.worse = Card.objects.create(name="Base card")
-        Reward.objects.create(card=self.worse, rate=Decimal("1"))
+class CardPromoCoverageTests(TestCase):
+    def test_nothing_without_purchases_at_mapped_places(self):
+        Promo.objects.create(
+            title="Deal", issuer="BPI", category=SpendCategory.GROCERY,
+            discount_pct=Decimal("10"),
+            ends_on=timezone.localdate() + timedelta(days=20),
+        )
+        self.assertIsNone(card_promo_coverage())
 
-    def test_nothing_is_reported_without_a_card_on_the_purchase(self):
-        Purchase.objects.create(category=SpendCategory.GROCERY,
-                                merchant="Puregold", total=Decimal("1000"))
-        self.assertIsNone(card_leakage())
+    def test_a_promo_where_you_shop_is_surfaced(self):
+        place = make_place(osm_id=7, kind=PlaceKind.SUPERMARKET,
+                           name="Puregold", brand="Puregold")
+        Promo.objects.create(
+            title="10% off", issuer="BPI", brand="Puregold",
+            category=SpendCategory.GROCERY, discount_pct=Decimal("10"),
+            ends_on=timezone.localdate() + timedelta(days=20),
+        )
+        Purchase.objects.create(place=place, category=SpendCategory.GROCERY,
+                                total=Decimal("1000"))
 
-    def test_using_the_wrong_card_is_quantified(self):
-        Purchase.objects.create(category=SpendCategory.GROCERY, merchant="Puregold",
-                                total=Decimal("1000"), card=self.worse)
-
-        insight = card_leakage()
-        # 5% vs 1% on 1,000 is 40 pesos left behind.
-        self.assertIn("40", insight.headline)
-        self.assertEqual(insight.tone, "warn")
-
-    def test_using_the_best_card_is_confirmed_rather_than_silent(self):
-        Purchase.objects.create(category=SpendCategory.GROCERY, merchant="Puregold",
-                                total=Decimal("1000"), card=self.best)
-
-        insight = card_leakage()
-        self.assertEqual(insight.tone, "good")
-        self.assertIn("best card", insight.headline)
+        insight = card_promo_coverage()
+        self.assertIn("card promo", insight.headline)
+        # Names the qualifying card without knowing whether you hold it.
+        self.assertIn("Any BPI card", insight.detail)
 
 
 class OtherInsightTests(TestCase):
@@ -195,15 +189,19 @@ class BriefingTests(TestCase):
         self.assertNotIn(REQUIREMENTS["promo_watch"], briefing.learning)
 
     def test_the_most_urgent_insight_leads(self):
-        # A warning outranks a confirmation, whatever the evidence behind each.
+        # A warning outranks anything merely informational.
         Promo.objects.create(
             title="Deal", category=SpendCategory.DINING, discount_pct=Decimal("50"),
             ends_on=timezone.localdate() + timedelta(days=1),
         )
-        card = Card.objects.create(name="Card")
-        Reward.objects.create(card=card, rate=Decimal("1"))
-        Purchase.objects.create(category=SpendCategory.GROCERY, merchant="Shop",
-                                total=Decimal("500"), card=card)
+        place = make_place(osm_id=8, kind=PlaceKind.SUPERMARKET, brand="Puregold")
+        Promo.objects.create(
+            title="Bank deal", issuer="BPI", brand="Puregold",
+            category=SpendCategory.GROCERY, discount_pct=Decimal("10"),
+            ends_on=timezone.localdate() + timedelta(days=40),
+        )
+        Purchase.objects.create(place=place, category=SpendCategory.GROCERY,
+                                total=Decimal("500"))
 
         briefing = build_briefing()
         self.assertEqual(briefing.insights[0].tone, "warn")

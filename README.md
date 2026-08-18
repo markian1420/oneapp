@@ -12,7 +12,7 @@ presented as a fact.
 | **Spending** | Where the money went, and did the lines add up |
 | **Promos** | What is running, and more importantly what has expired |
 | **Wardrobe** | Was that jacket worth it — cost per wear |
-| **Cards** | Which card do I tap here |
+| **Card promos** | Which banks are running offers, and where |
 | **Today** | What the app has worked out from my own history |
 
 ---
@@ -50,7 +50,7 @@ varies enormously. This table is the single most useful thing in this file:
 | **Dining** | None | — | Your receipts only |
 | **Apparel** | None | — | Cost per wear |
 | **Promos** | None at all | — | Typed in by hand |
-| **Card rewards** | None needed | — | Your own statements |
+| **Card promos** | None, but bank pages publish dates as text | — | Typed in by hand |
 
 Verified rather than assumed: the DOE per-station dashboard on
 `legacy.doe.gov.ph` no longer resolves, `doe.gov.ph/e-presyo` returns HTTP 500,
@@ -325,22 +325,24 @@ Rejected rows are reported with a line number rather than skipped silently.
 
 ## The other modules
 
-### Cards — the one that needs no feed
+### Card promos — a directory, not a wallet
 
-Enter each card and what it earns under **Cards → My wallet**. Rewards are rows,
-not fields: most cards have a headline rate on one category, a base rate on
-everything else, and sometimes a deal tied to one chain. Enter each separately
-or the card looks worse than it is everywhere outside its headline category.
+**The app stores no card of anyone's.** There is no card model, no number, no
+last four digits, and no list of what you hold — a test asserts that no such
+model exists, so the guarantee cannot quietly erode.
 
-Points and miles need a peso-per-point value, otherwise a points card cannot be
-compared against a cashback one — and comparing a percentage against a point
-count is how people pick the worse card.
+**Spend → Card promos** is a directory of offers the banks are publicly running,
+grouped by issuer and filterable by bank and category. Those are facts about the
+banks, not about you. You read the list and decide for yourself which of your
+cards qualifies; the app never learns the answer.
 
-**Cards → Which card?** ranks the wallet for one purchase. Arriving from a map
-pin or a place screen fills in the category and brand automatically.
+Bank promo pages are the one corner of this that is genuinely readable — BPI, for
+instance, publishes the merchant, the offer and **"Valid until"** as plain text,
+which is more than any fast food chain manages. So entry is quick and the end
+date is usually available, unlike merchant promos.
 
-The app never asks for a full card number, expiry or CVV. There is no field for
-them, and the last-four box refuses a 16-digit entry.
+A purchase records **how** you paid as free text ("BPI credit", "cash", "GCash").
+That is a note for grouping spend by payment method, not card data.
 
 ### Spending, promos and the wardrobe
 

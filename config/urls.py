@@ -22,7 +22,6 @@ urlpatterns = [
     path("map/", include("apps.places.urls")),
     path("fuel/", include("apps.fuel.urls")),
     path("grocery/", include("apps.grocery.urls")),
-    path("cards/", include("apps.cards.urls")),
     path("spend/", include("apps.spend.urls")),
     path("today/", include("apps.insights.urls")),
     path("", include("apps.core.urls")),

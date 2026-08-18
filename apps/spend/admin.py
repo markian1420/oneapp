@@ -10,13 +10,13 @@ class ItemInline(admin.TabularInline):
 
 @admin.register(Purchase)
 class PurchaseAdmin(admin.ModelAdmin):
-    list_display = ("occurred_at", "where", "category", "total", "card")
-    list_filter = ("category", "card")
+    list_display = ("occurred_at", "where", "category", "total", "paid_with")
+    list_filter = ("category",)
     date_hierarchy = "occurred_at"
     inlines = [ItemInline]
 
 
 @admin.register(Promo)
 class PromoAdmin(admin.ModelAdmin):
-    list_display = ("title", "brand", "category", "ends_on", "status")
-    list_filter = ("category", "brand")
+    list_display = ("title", "issuer", "brand", "category", "ends_on", "status")
+    list_filter = ("category", "issuer", "brand")

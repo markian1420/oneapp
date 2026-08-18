@@ -57,14 +57,14 @@
 
   <aside class="min-w-0 space-y-5">
     <div class="panel panel-pad">
-      <p class="eyebrow">Paying here</p>
+      <p class="eyebrow">Card promos</p>
       <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-        The app knows what kind of place this is and which brand, so it can rank your
-        cards for it without you typing anything.
+        Offers the banks are running here. The app stores no card of yours &mdash;
+        this is a directory of what exists, not a wallet.
       </p>
-      <a href="{% url 'cards:which' %}?place={{ place.pk }}" class="btn-primary btn-sm mt-3 w-full">
+      <a href="{% url 'spend:card_promos' %}" class="btn-primary btn-sm mt-3 w-full">
         {% include "partials/_icon.html" with name="credit-card" class="h-4 w-4" %}
-        Which card here?
+        See card promos
       </a>
     </div>
 

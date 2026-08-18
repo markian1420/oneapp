@@ -8,7 +8,6 @@ from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.cards.services import rank_cards
 from apps.core.categories import SpendCategory
 from apps.core.tables import Column, build_table
 from apps.core.views import module
@@ -16,7 +15,9 @@ from apps.core.views import module
 from .forms import ItemForm, PromoForm, PurchaseForm
 from .models import Promo, Purchase, PurchaseItem
 from .services import (
+    card_promos_at,
     expiring_promos,
+    issuers,
     live_promos,
     spend_by_category,
     stale_promos,
@@ -28,7 +29,7 @@ from .services import (
 @login_required
 @module("spend_purchases", "Spending")
 def purchases(request):
-    queryset = Purchase.objects.select_related("place", "card")
+    queryset = Purchase.objects.select_related("place")
 
     category = request.GET.get("category", "")
     if category in SpendCategory.values:
@@ -38,7 +39,7 @@ def purchases(request):
         Column("occurred_at", "When", order_by=("occurred_at",)),
         Column("where", "Where", order_by=("place__name", "merchant")),
         Column("category", "Category", order_by=("category",)),
-        Column("card", "Paid with", order_by=("card__name",)),
+        Column("paid_with", "Paid with", order_by=("paid_with",)),
         Column("total", "Total", order_by=("total",), align="right"),
         Column("actions", "", align="right"),
     ]
@@ -82,7 +83,7 @@ def purchase_create(request):
 @module("spend_purchases", "Purchase")
 def purchase_detail(request, pk: int):
     purchase = get_object_or_404(
-        Purchase.objects.select_related("place", "card").prefetch_related("items"),
+        Purchase.objects.select_related("place").prefetch_related("items"),
         pk=pk,
     )
     request.page_title = purchase.where
@@ -99,23 +100,14 @@ def purchase_detail(request, pk: int):
     else:
         form = ItemForm()
 
-    # What the card actually earned, so a logged purchase can be checked
-    # against the advice the app would have given.
-    picks = rank_cards(
-        category=purchase.category,
-        brand=purchase.place.brand if purchase.place else "",
-        amount=purchase.total,
-    )
-    used = next(
-        (p for p in picks if purchase.card_id and p.card.pk == purchase.card_id),
-        None,
-    )
+    # Card promos that were available here, so a purchase can be checked
+    # against what was on offer - without the app holding any card of yours.
+    available = card_promos_at(purchase.place) if purchase.place else []
 
     return render(request, "spend/purchase_detail.html", {
         "purchase": purchase,
         "form": form,
-        "best_pick": picks[0] if picks and picks[0].value > 0 else None,
-        "used_pick": used,
+        "available_promos": available,
     })
 
 
@@ -173,6 +165,7 @@ def promos(request):
     return render(request, "spend/promos.html", {
         "form": form,
         "live": live,
+        "issuers": issuers(),
         "expiring": expiring_promos(),
         "stale": stale_promos(),
         "expired": [p for p in Promo.objects.all() if not p.is_live][:20],
@@ -189,3 +182,34 @@ def promo_delete(request, pk: int):
     promo.delete()
     messages.success(request, "Promo removed.")
     return redirect("spend:promos")
+
+
+@login_required
+@module("spend_card_promos", "Card promos")
+def card_promos(request):
+    """Every card promo on record, from every issuer.
+
+    A directory of what banks are running, not a wallet. The app stores no
+    card of yours - only the offers, which are public facts about the banks.
+    """
+    issuer = request.GET.get("issuer", "").strip()
+    category = request.GET.get("category", "")
+    if category not in SpendCategory.values:
+        category = ""
+
+    live = live_promos(category=category, issuer=issuer, card_promos=True)
+
+    by_issuer: dict[str, list] = {}
+    for promo in live:
+        by_issuer.setdefault(promo.issuer, []).append(promo)
+
+    return render(request, "spend/card_promos.html", {
+        "live": live,
+        "by_issuer": sorted(by_issuer.items()),
+        "issuers": issuers(),
+        "issuer": issuer,
+        "categories": SpendCategory.choices,
+        "category": category,
+        "expiring": [p for p in live if p.days_left is not None and p.days_left <= 7],
+        "undated": [p for p in live if p.undated],
+    })

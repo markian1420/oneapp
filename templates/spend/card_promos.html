@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ live|length }} running · a directory of what the banks are offering
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'spend:promos' %}" class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="tag" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Add a promo</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="panel panel-pad mb-5 border-brand-300 bg-brand-50 dark:border-brand-500/40 dark:bg-brand-500/10">
+  <p class="text-sm font-bold text-brand-900 dark:text-brand-200">
+    No card of yours is stored anywhere in this app
+  </p>
+  <p class="mt-1 text-[13px] leading-relaxed text-brand-900/90 dark:text-brand-200/90">
+    There is no wallet, no card number, no last four digits and no list of what you
+    hold. This screen is a directory of offers the banks are publicly running &mdash;
+    facts about the banks, not about you. Read it, decide for yourself which of your
+    cards qualifies, and the app never learns the answer.
+  </p>
+</div>
+
+{% if expiring %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">Ending within a week</p>
+    <ul class="mt-2 space-y-1">
+      {% for promo in expiring %}
+        <li class="text-[13px] text-amber-800 dark:text-amber-300">
+          <strong>{{ promo.qualifies }}</strong> &mdash; {{ promo.title }}
+          {% if promo.days_left == 0 %}(ends today){% else %}({{ promo.days_left }}d left){% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="get" class="panel panel-pad mb-5 flex flex-wrap items-end gap-3">
+  <label class="min-w-0">
+    <span class="form-label">Bank</span>
+    <select name="issuer" class="form-control" data-autosubmit>
+      <option value="">All banks</option>
+      {% for name in issuers %}
+        <option value="{{ name }}" {% if name == issuer %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="min-w-0">
+    <span class="form-label">Category</span>
+    <select name="category" class="form-control" data-autosubmit>
+      <option value="">All categories</option>
+      {% for value, label in categories %}
+        <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a href="{% url 'spend:card_promos' %}" class="btn-ghost btn-sm">Reset</a>
+</form>
+
+{% if by_issuer %}
+  <div class="space-y-5">
+    {% for issuer_name, promos in by_issuer %}
+      <div class="panel">
+        <div class="panel-header">
+          <div class="min-w-0">
+            <p class="eyebrow">Bank</p>
+            <p class="text-sm font-bold text-ink dark:text-white">{{ issuer_name }}</p>
+          </div>
+          <span class="badge-info">{{ promos|length }} running</span>
+        </div>
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table min-w-[680px]">
+            <thead>
+              <tr>
+                <th>Offer</th><th>Where</th><th>Qualifying card</th>
+                <th class="text-right">Discount</th><th>Ends</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for promo in promos %}
+                <tr>
+                  <td>
+                    <span class="font-bold text-ink dark:text-slate-200">{{ promo.title }}</span>
+                    {% if promo.detail %}
+                      <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ promo.detail }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="whitespace-nowrap text-[12px]">
+                    {% if promo.brand %}{{ promo.brand }}{% else %}{{ promo.get_category_display }}{% endif %}
+                  </td>
+                  <td class="text-[12px]">
+                    {% if promo.card_name %}{{ promo.card_name }}
+                    {% else %}<span class="text-ink-muted dark:text-slate-500">Any {{ issuer_name }} card</span>{% endif %}
+                  </td>
+                  <td class="text-right mono font-bold text-brand-700 dark:text-brand-400">
+                    {% if promo.discount_pct %}{{ promo.discount_pct|floatformat:"-2" }}%
+                    {% elif promo.price %}&#8369;{{ promo.price|floatformat:"-2" }}
+                    {% else %}&mdash;{% endif %}
+                  </td>
+                  <td class="whitespace-nowrap text-[12px]">
+                    {% if promo.ends_on %}
+                      {{ promo.ends_on|date:"d M Y" }}
+                      {% if promo.days_left <= 7 %}<span class="ml-1 badge-warning">soon</span>{% endif %}
+                    {% else %}
+                      <span class="badge-muted">no end date</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">No card promos recorded yet.</p>
+    <p class="mx-auto mt-1 max-w-2xl text-sm text-ink-muted dark:text-slate-400">
+      Bank promo pages are the one corner of this that is genuinely readable &mdash;
+      BPI, for instance, publishes the merchant, the offer and
+      <strong>"Valid until"</strong> as plain text, which is more than any fast food
+      chain manages. So entering one takes seconds and, unlike a merchant promo, the
+      end date is usually right there on the page.
+    </p>
+    <a href="{% url 'spend:promos' %}" class="btn-primary btn-sm mt-4">Add the first one</a>
+  </div>
+{% endif %}
+
+{% if undated %}
+  <div class="panel panel-pad mt-5">
+    <p class="eyebrow">Worth re-checking</p>
+    <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      {{ undated|length }} entered with no end date. Banks usually do publish one, so
+      a blank here is more likely a gap in the entry than an offer that runs forever.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}

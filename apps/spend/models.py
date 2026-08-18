@@ -20,7 +20,6 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from apps.cards.models import Card
 from apps.core.categories import SpendCategory
 from apps.places.models import Place
 
@@ -46,10 +45,12 @@ class Purchase(models.Model):
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
     )
 
-    card = models.ForeignKey(
-        Card, null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="purchases",
-        help_text="Which card paid, so the app can check what it earned.",
+    # Free text rather than a link to a stored card. The app deliberately
+    # holds no record of anybody's cards - a note saying "BPI" is enough to
+    # group spending by payment method, and it is not card data.
+    paid_with = models.CharField(
+        max_length=60, blank=True,
+        help_text='How you paid, e.g. "BPI credit" or "cash". Never card details.',
     )
     reward_earned = models.DecimalField(
         max_digits=9, decimal_places=2, null=True, blank=True,
@@ -173,6 +174,20 @@ class Promo(models.Model):
         max_length=60, blank=True, db_index=True,
         help_text="Jollibee, 7-Eleven, Uniqlo… Blank for a store-wide sale.",
     )
+
+    # A card promo needs a card to qualify; a merchant promo is open to
+    # everyone. Both are offers with an expiry, so they share this model
+    # rather than duplicating the whole shape - the issuer is what tells them
+    # apart, and it is a fact about the offer, not about you.
+    issuer = models.CharField(
+        max_length=60, blank=True, db_index=True,
+        help_text="BPI, BDO, Metrobank… Blank means anyone can use it.",
+    )
+    card_name = models.CharField(
+        max_length=120, blank=True,
+        help_text='Which card qualifies, e.g. "Gold Rewards". Blank means any '
+                  "card from that issuer.",
+    )
     category = models.CharField(
         max_length=20, choices=SpendCategory.choices, db_index=True
     )
@@ -247,6 +262,19 @@ class Promo(models.Model):
             "upcoming": "badge-info",
             "expired": "badge-muted",
         }[self.status]
+
+    @property
+    def is_card_promo(self) -> bool:
+        return bool(self.issuer)
+
+    @property
+    def qualifies(self) -> str:
+        """Which cards can use this, in one line."""
+        if not self.issuer:
+            return "Any payment"
+        return f"{self.issuer} {self.card_name}".strip() if self.card_name else (
+            f"Any {self.issuer} card"
+        )
 
     @property
     def undated(self) -> bool:

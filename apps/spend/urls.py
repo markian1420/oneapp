@@ -12,5 +12,6 @@ urlpatterns = [
     path("items/<int:pk>/wear/", views.item_wear, name="item_wear"),
     path("wardrobe/", views.wardrobe_screen, name="wardrobe"),
     path("promos/", views.promos, name="promos"),
+    path("card-promos/", views.card_promos, name="card_promos"),
     path("promos/<int:pk>/delete/", views.promo_delete, name="promo_delete"),
 ]

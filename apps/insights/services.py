@@ -23,13 +23,17 @@ from decimal import Decimal
 from django.db.models import Avg, Count, Sum
 from django.utils import timezone
 
-from apps.cards.services import rank_cards
 from apps.core.categories import SpendCategory, category_for_place
 from apps.fuel.models import FillUp
 from apps.fuel.services import fuel_economy
 from apps.grocery.services import biggest_movers
 from apps.spend.models import Purchase, PurchaseItem
-from apps.spend.services import expiring_promos, live_promos, spend_by_category
+from apps.spend.services import (
+    card_promos_at,
+    expiring_promos,
+    live_promos,
+    spend_by_category,
+)
 
 # Below this many observations an insight is offered as a hint rather than a
 # finding. Five is not statistically meaningful; it is simply the point where a
@@ -275,56 +279,45 @@ def spend_drift() -> Insight | None:
     )
 
 
-def card_leakage() -> Insight | None:
-    """Money left on the table by tapping the wrong card.
+def card_promo_coverage() -> Insight | None:
+    """Card promos running where you actually shop.
 
-    Only counts purchases where a card was recorded, and says how many, because
-    the figure is only as complete as the logging behind it.
+    Built from the places in your own purchase history rather than the whole
+    promo list, so it surfaces the ones you could plausibly use. The app holds
+    no card of yours - this only says an offer exists, never that you have the
+    card for it.
     """
-    purchases = list(
-        Purchase.objects.exclude(card__isnull=True)
-        .select_related("card", "place")
-        .order_by("-occurred_at")[:60]
-    )
-    if not purchases:
+    places = [
+        p.place for p in
+        Purchase.objects.exclude(place__isnull=True).select_related("place")
+        .order_by("-occurred_at")[:40]
+    ]
+    if not places:
         return None
 
-    lost = Decimal("0")
-    missed = 0
-    for purchase in purchases:
-        picks = rank_cards(
-            category=purchase.category,
-            brand=purchase.place.brand if purchase.place else "",
-            amount=purchase.total,
-        )
-        if not picks:
+    seen, matches = set(), []
+    for place in places:
+        if place.pk in seen:
             continue
-        best = picks[0]
-        used = next((p for p in picks if p.card.pk == purchase.card_id), None)
-        if used and best.value > used.value:
-            lost += best.value - used.value
-            missed += 1
+        seen.add(place.pk)
+        for promo in card_promos_at(place):
+            matches.append((place, promo))
 
-    if not missed:
-        return Insight(
-            key="card_leakage",
-            headline="You have been tapping the best card every time",
-            detail=f"Checked across {len(purchases)} purchases with a card recorded.",
-            tone="good",
-            observations=len(purchases),
-        )
+    if not matches:
+        return None
 
+    place, promo = matches[0]
     return Insight(
-        key="card_leakage",
-        headline=f"About {lost:.0f} pesos left behind on {missed} purchases",
-        detail=(
-            f"Out of {len(purchases)} where a card was recorded, a different card "
-            "in your wallet would have earned more."
+        key="card_promo_coverage",
+        headline=(
+            f"{len(matches)} card promo{'s' if len(matches) > 1 else ''} running "
+            "where you shop"
         ),
-        tone="warn",
-        observations=len(purchases),
-        action_url="/cards/which/",
-        action_label="Check before you tap",
+        detail=f"{promo.qualifies} - {promo.title} at {place.display_name}.",
+        tone="info",
+        observations=len(seen),
+        action_url="/spend/card-promos/",
+        action_label="See card promos",
     )
 
 
@@ -379,7 +372,7 @@ BUILDERS = (
     cheapest_station_habit,
     grocery_swing,
     spend_drift,
-    card_leakage,
+    card_promo_coverage,
     promo_watch,
     idle_wardrobe,
 )
@@ -392,7 +385,7 @@ REQUIREMENTS = {
     "station_habit": "2 visits each to at least 2 stations",
     "grocery_swing": "a few days of DA prices imported",
     "spend_drift": "purchases logged in two different months",
-    "card_leakage": "purchases logged with the card recorded",
+    "card_promo_coverage": "a card promo entered for somewhere you shop",
     "promo_watch": "a promo with an end date",
     "idle_wardrobe": "clothing logged with wear tracking on",
 }

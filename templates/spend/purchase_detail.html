@@ -116,33 +116,36 @@
     </form>
 
     <div class="panel panel-pad">
-      <p class="eyebrow">Card check</p>
-      {% if purchase.card %}
-        <p class="mt-2 text-[13px] text-ink-soft dark:text-slate-400">
-          Paid with <strong class="text-ink dark:text-white">{{ purchase.card.label }}</strong>.
-        </p>
-        {% if best_pick and used_pick and best_pick.card_id != purchase.card_id %}
-          <p class="mt-2 text-[13px] leading-relaxed text-amber-700 dark:text-amber-400">
-            {{ best_pick.card.name }} would have returned
-            &#8369;{{ best_pick.value|floatformat:2 }} against
-            &#8369;{{ used_pick.value|floatformat:2 }} here.
-          </p>
-        {% elif best_pick and used_pick %}
-          <p class="mt-2 text-[13px] text-brand-700 dark:text-brand-400">
-            That was the best card for this purchase.
-          </p>
-        {% endif %}
+      <p class="eyebrow">Paid with</p>
+      {% if purchase.paid_with %}
+        <p class="mt-2 text-[13px] text-ink-soft dark:text-slate-400">{{ purchase.paid_with }}</p>
       {% else %}
-        <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-          No card recorded, so the app cannot check whether you used the best one.
-          {% if best_pick %}
-            For this purchase it would have suggested
-            <strong class="text-ink dark:text-white">{{ best_pick.card.name }}</strong>
-            &mdash; &#8369;{{ best_pick.value|floatformat:2 }} back.
-          {% endif %}
-        </p>
+        <p class="mt-2 text-[13px] text-ink-muted dark:text-slate-400">Not recorded.</p>
       {% endif %}
+      <p class="mt-2 text-[12px] leading-relaxed text-ink-muted dark:text-slate-500">
+        A note only. The app stores no card of yours &mdash; no number, no last four,
+        no list of what you hold.
+      </p>
     </div>
+
+    {% if available_promos %}
+      <div class="panel panel-pad">
+        <p class="eyebrow">Card promos here</p>
+        <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+          Offers the banks were running at this place. Whether one of your cards
+          qualifies is for you to know, not the app.
+        </p>
+        <ul class="mt-3 space-y-2">
+          {% for promo in available_promos %}
+            <li class="text-[13px]">
+              <span class="font-bold text-ink dark:text-slate-200">{{ promo.qualifies }}</span>
+              <span class="text-ink-muted dark:text-slate-400"> &mdash; {{ promo.title }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        <a href="{% url 'spend:card_promos' %}" class="btn-ghost btn-sm mt-3">All card promos</a>
+      </div>
+    {% endif %}
 
     <div class="panel panel-pad">
       <p class="eyebrow">Where</p>

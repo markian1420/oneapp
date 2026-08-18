@@ -32,10 +32,9 @@ MODULES: tuple[Module, ...] = (
     Module("fuel_vehicles", "Vehicles", "car", "fuel:vehicles", "Fuel"),
     Module("grocery_prices", "Commodity prices", "basket", "grocery:commodities", "Grocery"),
     Module("spend_purchases", "Spending", "receipt", "spend:purchases", "Spend"),
-    Module("spend_promos", "Promos", "tag", "spend:promos", "Spend"),
+    Module("spend_promos", "Merchant promos", "tag", "spend:promos", "Spend"),
+    Module("spend_card_promos", "Card promos", "credit-card", "spend:card_promos", "Spend"),
     Module("spend_wardrobe", "Wardrobe", "shirt", "spend:wardrobe", "Spend"),
-    Module("cards_which", "Which card?", "credit-card", "cards:which", "Cards"),
-    Module("cards_wallet", "My wallet", "wallet", "cards:wallet", "Cards"),
 )
 
 

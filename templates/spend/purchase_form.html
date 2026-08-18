@@ -26,7 +26,7 @@
         {% include "partials/_field.html" with field=form.category %}
         {% include "partials/_field.html" with field=form.occurred_at %}
         {% include "partials/_field.html" with field=form.total %}
-        {% include "partials/_field.html" with field=form.card %}
+        {% include "partials/_field.html" with field=form.paid_with %}
       </div>
 
       {% include "partials/_field.html" with field=form.reward_earned %}
@@ -50,11 +50,11 @@
       </p>
     </div>
     <div class="panel panel-pad">
-      <p class="eyebrow">Recording the card</p>
+      <p class="eyebrow">Paid with</p>
       <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-        Optional, but it lets the app check afterwards whether you tapped the card
-        that earned most &mdash; which is how you find out the advice is worth
-        following.
+        A free-text note, nothing more &mdash; "BPI credit", "cash", "GCash". Enough
+        to group spending by payment method. The app holds no card of yours: no
+        number, no last four digits, no list of what you carry.
       </p>
     </div>
   </aside>

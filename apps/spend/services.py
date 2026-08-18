@@ -92,7 +92,8 @@ def spend_by_category(when: date | None = None) -> list[CategoryTotal]:
     return result
 
 
-def live_promos(category: str = "", brand: str = "") -> list[Promo]:
+def live_promos(category: str = "", brand: str = "", *,
+                issuer: str = "", card_promos: bool | None = None) -> list[Promo]:
     """Promos running today, soonest to expire first.
 
     Filtered in Python rather than SQL because "live" depends on two nullable
@@ -103,6 +104,12 @@ def live_promos(category: str = "", brand: str = "") -> list[Promo]:
         queryset = queryset.filter(category=category)
     if brand:
         queryset = queryset.filter(brand__iexact=brand)
+    if issuer:
+        queryset = queryset.filter(issuer__iexact=issuer)
+    if card_promos is True:
+        queryset = queryset.exclude(issuer="")
+    elif card_promos is False:
+        queryset = queryset.filter(issuer="")
 
     promos = [p for p in queryset if p.is_live]
     # Undated promos sort last: they are the ones most likely to have quietly
@@ -200,3 +207,28 @@ def basket_comparison(description: str) -> list[dict]:
         }
         for r in rows if r["average"] is not None
     ]
+
+
+def card_promos_at(place) -> list[Promo]:
+    """Card promos usable at one place.
+
+    Matches on brand first, then falls back to the category, because a bank
+    deal is usually written against a chain but sometimes against a whole
+    category ("5% on all dining").
+    """
+    from apps.core.categories import category_for_place
+
+    category = category_for_place(place.kind)
+    by_brand = live_promos(brand=place.brand, card_promos=True) if place.brand else []
+    by_category = [
+        p for p in live_promos(category=category, card_promos=True)
+        if not p.brand
+    ]
+    return by_brand + by_category
+
+
+def issuers() -> list[str]:
+    """Every issuer named in the promo list, for the filter."""
+    return sorted(
+        {p.issuer for p in Promo.objects.exclude(issuer="") if p.issuer}
+    )

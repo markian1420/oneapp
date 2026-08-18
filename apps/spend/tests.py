@@ -10,7 +10,6 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.cards.models import Card, Reward
 from apps.core.categories import SpendCategory
 from apps.fuel.models import FillUp, Vehicle
 from apps.places.models import Place, PlaceKind
@@ -236,20 +235,23 @@ class SpendScreenTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.wears, 1)
 
-    def test_the_purchase_screen_checks_the_card_used(self):
-        best = Card.objects.create(name="Grocery card")
-        Reward.objects.create(card=best, rate=Decimal("5"),
-                              category=SpendCategory.GROCERY)
-        worse = Card.objects.create(name="Base card")
-        Reward.objects.create(card=worse, rate=Decimal("1"))
+    def test_the_purchase_screen_lists_card_promos_for_the_place(self):
+        place = Place.objects.create(
+            kind=PlaceKind.SUPERMARKET, osm_type=Place.OSMType.NODE, osm_id=9,
+            name="Puregold", brand="Puregold",
+            latitude=Decimal("14.58"), longitude=Decimal("121.06"),
+        )
+        Promo.objects.create(
+            title="10% off groceries", issuer="BPI", brand="Puregold",
+            category=SpendCategory.GROCERY, discount_pct=Decimal("10"),
+            ends_on=timezone.localdate() + timedelta(days=20),
+        )
+        purchase = make_purchase(place=place, paid_with="BPI credit")
 
-        purchase = make_purchase(card=worse, total=Decimal("1000"))
         response = self.client.get(
             reverse("spend:purchase_detail", args=[purchase.pk])
         )
-
-        self.assertEqual(response.context["best_pick"].card, best)
-        self.assertEqual(response.context["used_pick"].card, worse)
+        self.assertEqual(len(response.context["available_promos"]), 1)
 
     def test_a_purchase_needs_a_place_or_a_name(self):
         response = self.client.post(reverse("spend:purchase_create"), {
@@ -264,3 +266,93 @@ class SpendScreenTests(TestCase):
         response = self.client.get(reverse("spend:purchases"))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response["Location"])
+
+
+class CardPromoTests(TestCase):
+    """A directory of bank offers that holds nobody's card."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("shopper", password="not-a-real-password")
+        self.client.force_login(self.user)
+
+    def _promo(self, **overrides):
+        values = {
+            "title": "Dining deal", "category": SpendCategory.DINING,
+            "discount_pct": Decimal("15"),
+            "ends_on": timezone.localdate() + timedelta(days=30),
+        }
+        values.update(overrides)
+        return Promo.objects.create(**values)
+
+    def test_an_issuer_is_what_makes_it_a_card_promo(self):
+        self.assertFalse(self._promo(title="Store sale").is_card_promo)
+        self.assertTrue(self._promo(title="BPI deal", issuer="BPI").is_card_promo)
+
+    def test_qualifies_reads_as_a_sentence(self):
+        self.assertEqual(self._promo().qualifies, "Any payment")
+        self.assertEqual(self._promo(issuer="BDO").qualifies, "Any BDO card")
+        self.assertEqual(
+            self._promo(issuer="BPI", card_name="Gold Rewards").qualifies,
+            "BPI Gold Rewards",
+        )
+
+    def test_the_screen_shows_card_promos_only(self):
+        self._promo(title="Anyone can use this")
+        self._promo(title="Needs a BPI card", issuer="BPI")
+
+        response = self.client.get(reverse("spend:card_promos"))
+        self.assertEqual(
+            [p.title for p in response.context["live"]], ["Needs a BPI card"]
+        )
+
+    def test_promos_group_by_bank(self):
+        self._promo(title="A", issuer="BPI")
+        self._promo(title="B", issuer="BPI")
+        self._promo(title="C", issuer="BDO")
+
+        grouped = dict(
+            self.client.get(reverse("spend:card_promos")).context["by_issuer"]
+        )
+        self.assertEqual(len(grouped["BPI"]), 2)
+        self.assertEqual(len(grouped["BDO"]), 1)
+
+    def test_filtering_by_bank(self):
+        self._promo(title="A", issuer="BPI")
+        self._promo(title="C", issuer="BDO")
+
+        response = self.client.get(reverse("spend:card_promos"), {"issuer": "BDO"})
+        self.assertEqual([p.title for p in response.context["live"]], ["C"])
+
+    def test_an_expired_card_promo_is_not_listed(self):
+        self._promo(title="Old", issuer="BPI",
+                    ends_on=timezone.localdate() - timedelta(days=1))
+        self.assertEqual(
+            self.client.get(reverse("spend:card_promos")).context["live"], []
+        )
+
+    def test_a_brand_promo_and_a_category_promo_both_match_a_place(self):
+        from .services import card_promos_at
+
+        place = Place.objects.create(
+            kind=PlaceKind.FAST_FOOD, osm_type=Place.OSMType.NODE, osm_id=5,
+            name="Jollibee", brand="Jollibee",
+            latitude=Decimal("14.58"), longitude=Decimal("121.06"),
+        )
+        self._promo(title="At Jollibee", issuer="BPI", brand="Jollibee")
+        self._promo(title="All dining", issuer="BDO", category=SpendCategory.DINING)
+        self._promo(title="Groceries", issuer="BDO", category=SpendCategory.GROCERY)
+
+        titles = {p.title for p in card_promos_at(place)}
+        self.assertEqual(titles, {"At Jollibee", "All dining"})
+
+    def test_the_screen_says_plainly_that_no_card_is_stored(self):
+        response = self.client.get(reverse("spend:card_promos"))
+        self.assertContains(response, "No card of yours is stored")
+
+    def test_there_is_nowhere_in_the_app_to_store_a_card(self):
+        # The guarantee, pinned: no card model exists to write to.
+        from django.apps import apps
+
+        names = {m.__name__.lower() for m in apps.get_models()}
+        self.assertNotIn("card", names)
+        self.assertNotIn("reward", names)
