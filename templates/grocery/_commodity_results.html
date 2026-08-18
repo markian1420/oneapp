@@ -1,0 +1,65 @@
+{% if commodities %}
+  <div class="table-wrap">
+    <table class="table min-w-[760px]">
+      <thead>{% include "partials/_table_head.html" %}</thead>
+      <tbody>
+        {% for commodity in commodities %}
+          <tr>
+            <td>
+              <a href="{% url 'grocery:commodity_detail' commodity.pk %}"
+                 class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                {{ commodity.name }}
+              </a>
+              {% if commodity.is_tracked %}
+                <span class="ml-1 align-middle text-brand-600 dark:text-brand-400">
+                  {% include "partials/_icon.html" with name="star" class="inline h-3.5 w-3.5" %}
+                </span>
+              {% endif %}
+              {% if commodity.specification %}
+                <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ commodity.specification }}</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-[12px]">{{ commodity.get_category_display }}</td>
+            <td class="whitespace-nowrap text-right">
+              {% if commodity.movement.latest %}
+                <span class="mono font-bold text-ink dark:text-white">&#8369;{{ commodity.movement.latest|floatformat:2 }}</span>
+                <span class="block text-[11px] text-ink-muted dark:text-slate-500">per {{ commodity.unit }}</span>
+              {% else %}
+                <span class="badge-muted">No data</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-right">
+              {% if commodity.movement.week_pct is not None %}
+                <span class="{{ commodity.movement.badge_class }}">
+                  {% if commodity.movement.week_pct > 0 %}+{% endif %}{{ commodity.movement.week_pct }}%
+                </span>
+              {% else %}
+                <span class="text-ink-muted dark:text-slate-500">&mdash;</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-right mono text-[13px]">
+              {% if commodity.movement.month_pct is not None %}
+                {% if commodity.movement.month_pct > 0 %}+{% endif %}{{ commodity.movement.month_pct }}%
+              {% else %}
+                <span class="text-ink-muted dark:text-slate-500">&mdash;</span>
+              {% endif %}
+            </td>
+            <td class="text-right mono">{{ commodity.movement.points }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_table_pager.html" %}
+{% else %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">Nothing matches.</p>
+    <p class="mt-1 text-sm text-ink-muted dark:text-slate-400">
+      {% if q or category %}
+        Try a wider search, or <a href="{% url 'grocery:commodities' %}" class="font-bold text-brand-700 underline">reset the filters</a>.
+      {% else %}
+        Load the DA index first: <code class="kbd">python manage.py import_da_prices --backfill 16</code>
+      {% endif %}
+    </p>
+  </div>
+{% endif %}

@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from apps.fuel.models import DOEAdvisory, FillUp, PriceObservation, Station
 from apps.fuel.services import fuel_economy, week_start
+from apps.grocery.models import CommodityPrice
+from apps.grocery.services import biggest_movers
 
 
 def module(code: str, title: str):
@@ -109,5 +111,13 @@ def home(request):
         "economy": fuel_economy(FillUp.objects.order_by("-filled_at")[:20]),
         "by_brand": by_brand,
         "has_data": FillUp.objects.exists(),
+        # Grocery is the one module with an official daily feed, so the
+        # overview can say something useful about it on day one - before a
+        # single receipt has been logged.
+        "movers": biggest_movers(limit=6),
+        "grocery_points": CommodityPrice.objects.count(),
+        "grocery_latest": CommodityPrice.objects.order_by("-observed_on")
+                                                .values_list("observed_on", flat=True)
+                                                .first(),
     }
     return render(request, "core/home.html", context)

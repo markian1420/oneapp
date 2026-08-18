@@ -431,6 +431,63 @@
     @apply border-brand-500/50 bg-brand-500/10;
   }
 
+
+  /* ----------------------------------------------------------------- Charts */
+  /* One series, drawn as inline SVG from server-computed geometry. Colours are
+     picked per theme rather than flipped: #15803d passes contrast on the light
+     panel, #20a95a on the dark one, both verified against the surface they sit
+     on rather than assumed to work. */
+  .chart {
+    @apply block h-auto w-full;
+  }
+
+  .chart-line {
+    fill: none;
+    stroke: var(--color-brand-600);
+    stroke-width: 2;              /* thin mark: the data, not a ribbon */
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dark .chart-line { stroke: var(--color-brand-400); }
+
+  .chart-point {
+    fill: var(--color-brand-600);
+    stroke: #fff;                 /* 2px surface ring, so the mark stays legible
+                                     where it overlaps the fill below it */
+    stroke-width: 2;
+  }
+
+  .dark .chart-point {
+    fill: var(--color-brand-400);
+    stroke: var(--color-night-alt);
+  }
+
+  .chart-grid {
+    stroke: var(--color-slate-200);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;        /* recessive: readable, never competing */
+  }
+
+  .dark .chart-grid { stroke: var(--color-night-line); }
+
+  /* Axis and tick text wear text tokens, never the series colour. */
+  .chart-tick,
+  .chart-axis {
+    fill: var(--color-ink-muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .dark .chart-tick,
+  .dark .chart-axis { fill: var(--color-slate-400); }
+
+  .chart-fade-top    { stop-color: var(--color-brand-500); stop-opacity: 0.18; }
+  .chart-fade-bottom { stop-color: var(--color-brand-500); stop-opacity: 0.01; }
+
+  .dark .chart-fade-top    { stop-color: var(--color-brand-400); stop-opacity: 0.22; }
+  .dark .chart-fade-bottom { stop-color: var(--color-brand-400); stop-opacity: 0.02; }
+
   /* ------------------------------------------------------------- Utilities */
   .mono {
     @apply font-mono text-[13px] tracking-tight;

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ total_commodities|intcomma }} commodities · {{ total_points|intcomma }} readings ·
+    {% if latest_day %}latest {{ latest_day|date:"d M Y" }}{% else %}no data loaded{% endif %}
+  </p>
+{% endblock %}
+
+{% block content %}
+{% if not total_points %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">No commodity prices loaded yet.</p>
+    <p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
+      Pull the DA Daily Price Index with
+      <code class="kbd">python manage.py import_da_prices --backfill 16</code>.
+      It publishes on weekdays only.
+    </p>
+  </div>
+{% endif %}
+
+<div class="panel panel-pad mb-5">
+  <p class="eyebrow">Where these come from</p>
+  <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+    The Department of Agriculture publishes a daily prevailing retail price for NCR,
+    averaged across 33 wet markets. It is the whole region, not one market &mdash; so
+    treat it as the going rate to check a stall against, not as the price you will be
+    quoted. Anything you buy yourself is worth more than this, and gets logged separately.
+  </p>
+</div>
+
+<form method="get" action="{% url 'grocery:commodities' %}"
+      hx-get="{% url 'grocery:commodities' %}"
+      hx-target="#commodity-results"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      hx-indicator="#filtering"
+      hx-trigger="submit, change, input changed delay:400ms from:input[name='q']"
+      class="panel panel-pad mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+
+  <label class="min-w-0 sm:col-span-2">
+    <span class="form-label">Search</span>
+    <input type="search" name="q" value="{{ q }}" class="form-control"
+           placeholder="Pork, bangus, pechay, rice…">
+  </label>
+
+  <label class="min-w-0">
+    <span class="form-label">Category</span>
+    <select name="category" class="form-control">
+      <option value="">All categories</option>
+      {% for value, label in categories %}
+        <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="flex cursor-pointer items-center gap-2">
+    <input type="checkbox" name="tracked" value="1" {% if tracked_only %}checked{% endif %}
+           class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+    <span class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Only my watchlist</span>
+  </label>
+
+  <div class="flex flex-wrap items-end justify-end gap-2 sm:col-span-2 lg:col-span-4">
+    <span id="filtering" class="htmx-indicator text-xs font-bold text-ink-muted dark:text-slate-400">
+      Filtering&hellip;
+    </span>
+    <button type="submit" class="btn-primary btn-sm">Search</button>
+    <a href="{% url 'grocery:commodities' %}" class="btn-ghost btn-sm">Reset</a>
+  </div>
+</form>
+
+<div id="commodity-results">
+  {% include "grocery/_commodity_results.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/htmx/htmx.min.js' %}" defer></script>
+{% endblock %}

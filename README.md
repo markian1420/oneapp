@@ -109,6 +109,9 @@ OneApp/
 │   └── grocery/
 │       ├── models.py               # Commodity, CommodityPrice
 │       ├── da_index.py             # DA Daily Price Index PDF parser (column geometry)
+│       ├── services.py             # Movement over 7/30-day windows, biggest movers
+│       ├── chart.py                # Server-computed SVG geometry for the price line
+│       ├── views.py                # Commodity list and detail
 │       └── management/commands/
 │           └── import_da_prices.py     # Fetch and load the DA daily index
 ├── assets/input.css                # Tailwind source (outside static/ on purpose)
@@ -283,16 +286,18 @@ Targeted runs, per module:
 .\.venv\Scripts\python.exe manage.py test apps.grocery
 ```
 
-70 tests. **Fuel (55)**: brand normalisation, region mapping, the four price
+89 tests. **Fuel (55)**: brand normalisation, region mapping, the four price
 tiers, detour-aware ranking, fuel economy, fill-up arithmetic, the map
 endpoint's bounding box and cap, open-redirect refusal, both importers, and
 that every screen renders empty and populated.
 
-**Grocery (15)**: the DA PDF parser — column splitting by geometry, `n/a`
+**Grocery (34)**: the DA PDF parser — column splitting by geometry, `n/a`
 handling, wrapped cells, the methodology footer, and a regression for the
 layout drift described below. These use synthetic word coordinates rather than
 a checked-in PDF, since coordinates are the parser's actual input and a binary
-fixture makes failures much harder to read.
+fixture makes failures much harder to read. Plus the movement maths (window
+comparison, refusing to report a month it cannot see), the chart geometry
+(flat series, single reading, viewBox bounds) and the screens.
 
 Also worth running after settings changes:
 
