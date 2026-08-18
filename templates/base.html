@@ -148,6 +148,16 @@
       });
     });
 
+    // Offline support. Registered after load so it never competes with the
+    // first render, and skipped on insecure origins where it cannot work.
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {
+          // No offline support is a degraded experience, not a broken one.
+        });
+      });
+    }
+
     // Filter bars submit on change: one control, one round trip, no Apply
     // button to forget.
     document.querySelectorAll('[data-autosubmit]').forEach(function (control) {

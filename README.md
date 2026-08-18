@@ -1,19 +1,25 @@
 # OneApp
 
-A personal budgeting and spend-analysis console.
+A personal budgeting and spend-analysis console for the Philippines, built
+around one idea: **every price says where it came from.** A guess is never
+presented as a fact.
 
-**Fuel** maps Philippine petrol stations with a price layer, a fill-up log, and
-a comparison that answers the question the map exists for — *given where I am
-and what I drive, where should I actually refuel?*
-
-**Grocery** tracks commodity prices from the Department of Agriculture's Daily
-Price Index for NCR. A utilities module is planned and slots into the same
-shell.
+| Module | What it answers |
+|---|---|
+| **Map** | What is around me, nearest first — 17,648 places across 8 kinds |
+| **Fuel** | Where should I actually refuel, once the detour is paid for |
+| **Grocery** | What is cheap this week, from the DA daily index |
+| **Spending** | Where the money went, and did the lines add up |
+| **Promos** | What is running, and more importantly what has expired |
+| **Wardrobe** | Was that jacket worth it — cost per wear |
+| **Cards** | Which card do I tap here |
+| **Today** | What the app has worked out from my own history |
 
 ---
 
 ## Contents
 
+- [What data actually exists](#what-data-actually-exists)
 - [What this does, and the one thing it cannot do](#what-this-does-and-the-one-thing-it-cannot-do)
 - [How prices are decided](#how-prices-are-decided)
 - [Project structure](#project-structure)
@@ -29,6 +35,30 @@ shell.
 - [Troubleshooting](#troubleshooting)
 
 ---
+
+## What data actually exists
+
+Every module was designed around what the Philippines actually publishes, which
+varies enormously. This table is the single most useful thing in this file:
+
+| Category | Official feed | Cadence | Fallback |
+|---|---|---|---|
+| **Fuel** | DOE weekly advisory (brand + region) | Weekly, Tuesdays | Your receipts |
+| **Grocery commodities** | **DA Daily Price Index (NCR)** | **Daily** | — |
+| **Packaged goods** | DTI SRP bulletin | Occasional | Your receipts |
+| **Supermarket SKUs** | None | — | Your receipts only |
+| **Dining** | None | — | Your receipts only |
+| **Apparel** | None | — | Cost per wear |
+| **Promos** | None at all | — | Typed in by hand |
+| **Card rewards** | None needed | — | Your own statements |
+
+Verified rather than assumed: the DOE per-station dashboard on
+`legacy.doe.gov.ph` no longer resolves, `doe.gov.ph/e-presyo` returns HTTP 500,
+brand promo pages are images with the terms baked into the graphic and no dates
+in text, and Shopee/Lazada's APIs are seller-side so give a shopper nothing.
+
+**Places come from OpenStreetMap** — free, ODbL, and complete enough to be
+useful: 17,648 in Metro Manila alone.
 
 ## What this does, and the one thing it cannot do
 
@@ -91,6 +121,20 @@ keeps the number one you can check by hand.
 ```
 OneApp/
 ├── apps/
+│   ├── places/                     # Shared: every place on the map, any kind
+│   │   ├── models.py               # Place + PlaceKind (fuel, market, mall…)
+│   │   ├── geo.py                  # Distance, shared by every module
+│   │   ├── overpass.py             # OpenStreetMap client + the 83 PH areas
+│   │   ├── brands.py               # "Sea Oil"/"SEAOIL"/"Seaoil" → one brand
+│   │   └── management/commands/import_places.py
+│   ├── cards/                      # Which card to tap
+│   │   ├── models.py               # Card + Reward rules
+│   │   └── services.py             # Ranking, caps, points conversion
+│   ├── spend/                      # Purchases, promos, wardrobe
+│   │   ├── models.py               # Purchase, PurchaseItem, Promo
+│   │   └── services.py             # Category totals, cost per wear
+│   ├── insights/                   # The daily briefing
+│   │   └── services.py             # Explainable stats, with confidence
 │   ├── core/                       # App shell: sidebar registry, overview, table helper
 │   │   ├── navigation.py           # The sidebar, as data — add a module here
 │   │   ├── tables.py               # Server-side sort / page / page-size helper
@@ -196,20 +240,23 @@ with and your edits appear to do nothing.
 ### Stations, from OpenStreetMap
 
 ```powershell
-# Metro Manila (the default) — about 1,060 stations
-.\.venv\Scripts\python.exe manage.py import_stations --area NCR
+# Fuel stations in Metro Manila (the default)
+.\.venv\Scripts\python.exe manage.py import_places --area NCR --kind fuel
+
+# Everything: fuel, markets, supermarkets, convenience, dining, malls, pharmacies
+.\.venv\Scripts\python.exe manage.py import_places --area NCR --kind all
 
 # One or more provinces, by name or ISO code
-.\.venv\Scripts\python.exe manage.py import_stations --area Rizal --area PH-CAV
+.\.venv\Scripts\python.exe manage.py import_places --area Rizal --area PH-CAV
 
 # The whole country: Metro Manila plus all 82 provinces, one query each
-.\.venv\Scripts\python.exe manage.py import_stations --area all
+.\.venv\Scripts\python.exe manage.py import_places --area all
 
 # A plain bounding box, when the public Overpass instances are struggling
-.\.venv\Scripts\python.exe manage.py import_stations --bbox 14.35,120.90,14.80,121.15
+.\.venv\Scripts\python.exe manage.py import_places --bbox 14.35,120.90,14.80,121.15
 
 # See what would change without writing
-.\.venv\Scripts\python.exe manage.py import_stations --area NCR --dry-run
+.\.venv\Scripts\python.exe manage.py import_places --area NCR --dry-run
 ```
 
 Re-running is safe and is how you refresh: stations are matched on their OSM
@@ -277,6 +324,68 @@ A blank `brand` means the region's prevailing price across brands. Fuel names
 are matched loosely too: `unleaded`, `RON 95`, `premium diesel` all resolve.
 Rejected rows are reported with a line number rather than skipped silently.
 
+## The other modules
+
+### Cards — the one that needs no feed
+
+Enter each card and what it earns under **Cards → My wallet**. Rewards are rows,
+not fields: most cards have a headline rate on one category, a base rate on
+everything else, and sometimes a deal tied to one chain. Enter each separately
+or the card looks worse than it is everywhere outside its headline category.
+
+Points and miles need a peso-per-point value, otherwise a points card cannot be
+compared against a cashback one — and comparing a percentage against a point
+count is how people pick the worse card.
+
+**Cards → Which card?** ranks the wallet for one purchase. Arriving from a map
+pin or a place screen fills in the category and brand automatically.
+
+The app never asks for a full card number, expiry or CVV. There is no field for
+them, and the last-four box refuses a 16-digit entry.
+
+### Spending, promos and the wardrobe
+
+**Spend → Spending** logs groceries, dining and clothes. Fuel has its own screen
+because litres and odometer readings mean something specific, but it is counted
+in the category totals.
+
+**Spend → Promos** is a notebook, not a feed — nothing in the Philippines
+publishes promos machine-readably. The field the form pushes hardest on is the
+one nobody publishes: when it ends. Undated promos sort last and get flagged for
+review after two months.
+
+**Spend → Wardrobe** tracks cost per wear. Tick *track wears* on a clothing line,
+then tap *Wore it* when you use it. Unworn items lead the list.
+
+### Today — the briefing
+
+**Today** is the self-learning layer. It uses rolling medians, month-on-month
+deltas and simple comparisons — nothing you could not check by hand. At the
+volumes a personal budget produces, anything opaque would be fitting noise.
+
+Every insight states how many observations it rests on, so a thin one reads as
+thin. When it has nothing to say it lists exactly what each missing insight
+needs, rather than showing an empty screen.
+
+## Offline and installing on a phone
+
+The app ships a web manifest and a service worker, so it installs to a home
+screen and keeps working on a bad connection:
+
+- **App shell and libraries** — cache first; instant, and they only change on deploy.
+- **Pages** — network first, falling back to the last copy seen. Safe because
+  every price in the app is dated, so nothing stale can look current.
+- **Map tiles and the places API** — network only. A stale tile is confusing and
+  a cached viewport would draw pins that are not there.
+- **Admin and sign-in** — never cached, since a cached authenticated page served
+  after sign-out would be a real leak.
+
+The worker is served from the site root (`/sw.js`) rather than `/static/`: a
+worker fetched from `/static/` can only control `/static/` and would never see a
+page navigation.
+
+Offline needs HTTPS (or localhost), so it only activates once the app is hosted.
+
 ## Tests
 
 Targeted runs, per module:
@@ -286,7 +395,7 @@ Targeted runs, per module:
 .\.venv\Scripts\python.exe manage.py test apps.grocery
 ```
 
-89 tests. **Fuel (55)**: brand normalisation, region mapping, the four price
+202 tests. **Fuel (55)**: brand normalisation, region mapping, the four price
 tiers, detour-aware ranking, fuel economy, fill-up arithmetic, the map
 endpoint's bounding box and cap, open-redirect refusal, both importers, and
 that every screen renders empty and populated.

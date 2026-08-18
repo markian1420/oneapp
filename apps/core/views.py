@@ -122,3 +122,14 @@ def home(request):
                                                 .first(),
     }
     return render(request, "core/home.html", context)
+
+
+def offline(request):
+    """Shown when a page is requested with no connection.
+
+    Deliberately reachable while signed out: the service worker caches it at
+    install time, before anyone has necessarily signed in.
+    """
+    template = "core/offline.html" if request.user.is_authenticated else "core/offline_shell.html"
+    return render(request, template, {"page_title": "Offline"})
+

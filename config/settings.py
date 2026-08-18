@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.grocery",
     "apps.cards",
     "apps.spend",
+    "apps.insights",
 ]
 
 MIDDLEWARE = [

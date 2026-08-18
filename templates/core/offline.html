@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Offline · OneApp{% endblock %}
+
+{% block content %}
+<div class="panel panel-pad mx-auto max-w-xl text-center">
+  <p class="text-lg font-black tracking-tight text-ink dark:text-white">You are offline</p>
+  <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted dark:text-slate-400">
+    Pages you have already opened still work from the last copy seen. The map needs
+    a connection for its tiles, and prices you have not loaded before will not be
+    there &mdash; every price in the app is dated, so nothing stale can look current.
+  </p>
+  <button type="button" onclick="window.location.reload()" class="btn-primary btn-sm mt-4">
+    Try again
+  </button>
+</div>
+{% endblock %}

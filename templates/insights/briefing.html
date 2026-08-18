@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {% now "l, d F Y" %} &mdash; worked out from your own history
+  </p>
+{% endblock %}
+
+{% block content %}
+{% if briefing.has_anything %}
+  <div class="space-y-4">
+    {% for insight in briefing.insights %}
+      <div class="panel panel-pad {% if forloop.first and insight.tone == 'bad' %}border-red-300 dark:border-red-500/40{% endif %}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-base font-black tracking-tight text-ink dark:text-white sm:text-lg">
+              {{ insight.headline }}
+            </p>
+            {% if insight.detail %}
+              <p class="mt-1.5 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+                {{ insight.detail }}
+              </p>
+            {% endif %}
+            <p class="mt-2 text-[11px] font-bold uppercase tracking-wide text-ink-muted dark:text-slate-500">
+              {{ insight.confidence_note }}
+            </p>
+          </div>
+          <span class="{{ insight.badge_class }} shrink-0">{{ insight.confidence }}</span>
+        </div>
+
+        {% if insight.action_url %}
+          <a href="{{ insight.action_url }}" class="btn-ghost btn-sm mt-3">{{ insight.action_label }}</a>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">Nothing to report yet.</p>
+    <p class="mx-auto mt-1 max-w-xl text-sm text-ink-muted dark:text-slate-400">
+      This screen has nothing to say until there is history to say it from. That is
+      the honest state on day one, not a fault &mdash; every line below is something
+      the app is waiting to be able to tell you.
+    </p>
+  </div>
+{% endif %}
+
+{% if briefing.learning %}
+  <div class="panel panel-pad mt-5">
+    <p class="eyebrow">Still learning</p>
+    <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+      {{ briefing.learning|length }} of {{ total_possible }} things it cannot work out
+      yet, and exactly what each one needs:
+    </p>
+    <ul class="mt-3 space-y-1.5">
+      {% for need in briefing.learning %}
+        <li class="flex gap-2 text-[13px] text-ink-soft dark:text-slate-400">
+          <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+          <span>{{ need }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="panel panel-pad mt-5">
+  <p class="eyebrow">How this works</p>
+  <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+    Rolling medians, month-on-month deltas and simple comparisons &mdash; nothing you
+    could not check by hand. At the volumes a personal budget produces, anything
+    opaque would be fitting noise and presenting it with a straight face. Every line
+    says how many observations it rests on, so a thin one reads as thin instead of
+    arriving with the same authority as a solid one.
+  </p>
+</div>
+{% endblock %}
