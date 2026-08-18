@@ -10,7 +10,6 @@ tank is not a two-peso saving once the detour to reach it is paid for.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -18,18 +17,10 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 
+from apps.places.geo import ROAD_DISTANCE_FACTOR, haversine_km
 from apps.places.models import Place
 
 from .models import DOEAdvisory, PriceObservation, PriceTier
-
-# Straight-line distance understates driving distance - roads bend, rivers need
-# bridges, and a station across a divided highway needs a U-turn. 1.35 is the
-# usual urban planning fudge and keeps the savings estimate conservative, which
-# is the right direction to be wrong in: it under-promises the saving.
-ROAD_DISTANCE_FACTOR = Decimal("1.35")
-
-EARTH_RADIUS_KM = 6371.0088
-
 
 @dataclass(frozen=True)
 class Quote:
@@ -59,15 +50,6 @@ class Quote:
 
 
 UNKNOWN_QUOTE = Quote(price=None, tier=PriceTier.UNKNOWN, detail="No price on record")
-
-
-def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance in kilometres."""
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    d_lat = p2 - p1
-    d_lon = math.radians(lon2 - lon1)
-    a = math.sin(d_lat / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(d_lon / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
 def quotes_for(places, fuel_type: str) -> dict[int, Quote]:

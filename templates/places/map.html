@@ -112,6 +112,7 @@
   var listEl = document.getElementById('list');
   var scopeEl = document.getElementById('scope');
   var pending = null, debounce = null, originMarker = null;
+  var origin = null;   // Your location, once shared. Drives 'nearest to me'.
 
   var peso = new Intl.NumberFormat('en-PH', {
     style: 'currency', currency: 'PHP', maximumFractionDigits: 2
@@ -182,6 +183,9 @@
             + '<span class="text-xs font-bold text-ink-muted">/L</span></p>'
             + '<p class="mt-1 text-[11px] text-ink-muted">' + escapeHtml(place.tier_label || '') + '</p>'
           : '') +
+        (place.distance_km != null
+          ? '<p class="mt-1 text-xs font-bold text-brand-700 dark:text-brand-400">about ' + place.distance_km + ' km away</p>'
+          : '') +
         (place.hours ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(place.hours) + '</p>' : '') +
         '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + place.url + '">Open</a></p>'
       );
@@ -206,9 +210,14 @@
           ) +
         '</span>' +
       '</span>' +
-      (place.price != null
-        ? '<span class="shrink-0 text-sm font-black text-ink dark:text-white">' + peso.format(place.price) + '</span>'
-        : '');
+      '<span class="shrink-0 text-right">' +
+        (place.price != null
+          ? '<span class="block text-sm font-black text-ink dark:text-white">' + peso.format(place.price) + '</span>'
+          : '') +
+        (place.distance_km != null
+          ? '<span class="block text-[11px] font-bold text-ink-muted dark:text-slate-400">' + place.distance_km + ' km</span>'
+          : '') +
+      '</span>';
     return a;
   }
 
@@ -227,9 +236,10 @@
       if (index < 40) listEl.appendChild(row(place));
     });
 
-    scopeEl.textContent = data.truncated
-      ? 'Showing ' + data.shown + ' of ' + data.total + ' — zoom in for the rest'
-      : data.shown + ' place' + (data.shown === 1 ? '' : 's') + ' in view';
+    var order = data.sorted_by === 'distance' ? 'nearest first' : 'A-Z';
+    scopeEl.textContent = (data.truncated
+      ? 'Showing ' + data.shown + ' of ' + data.total
+      : data.shown + ' place' + (data.shown === 1 ? '' : 's')) + ' · ' + order;
   }
 
   function load() {
@@ -249,6 +259,13 @@
       favorites: document.getElementById('favorites').checked ? '1' : ''
     });
     kinds.forEach(function (k) { params.append('kind', k); });
+
+    // With a location the server ranks by distance and returns how far each
+    // place is; without one it falls back to alphabetical.
+    if (origin) {
+      params.set('lat', origin.lat);
+      params.set('lng', origin.lng);
+    }
 
     if (pending) pending.abort();
     pending = new AbortController();
@@ -290,6 +307,7 @@
     if (!navigator.geolocation) { window.alert('This browser will not share a location.'); return; }
     navigator.geolocation.getCurrentPosition(function (pos) {
       var here = [pos.coords.latitude, pos.coords.longitude];
+      origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       if (originMarker) map.removeLayer(originMarker);
       originMarker = L.circleMarker(here, {
         radius: 8, color: '#15803d', fillColor: '#20a95a', fillOpacity: 0.9, weight: 3

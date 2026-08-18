@@ -23,11 +23,21 @@ from apps.core.views import module
 from apps.fuel.models import FuelType, Vehicle
 from apps.fuel.services import quotes_for
 
+from .geo import bounding_box, road_km
 from .models import KIND_STYLE, Place, PlaceKind
 
 # Metro Manila, used only before there is anything to centre on.
 DEFAULT_CENTER = (14.5995, 120.9842)
 DEFAULT_ZOOM = 13
+
+# How far "nearest to me" looks. Wide enough to always find something in a
+# Philippine city, narrow enough that the exact-distance pass stays cheap.
+NEAR_RADIUS_KM = 15.0
+
+# Ceiling on rows the distance pass will measure. A guard against someone
+# panning to a view that contains half the country, not a real limit: the box
+# above almost always cuts it far below this.
+MAX_DISTANCE_CANDIDATES = 3000
 
 
 @login_required
@@ -104,10 +114,43 @@ def places_json(request):
             Q(name__icontains=search) | Q(brand__icontains=search)
         )
 
+    origin = None
+    try:
+        origin = (float(request.GET["lat"]), float(request.GET["lng"]))
+    except (KeyError, ValueError):
+        pass
+
     total = queryset.count()
     limit = settings.MAP_MAX_STATIONS
-    # Favourites first so the cap never hides somewhere you actually use.
-    places = list(queryset.order_by("-is_favorite", "name")[:limit])
+
+    if origin:
+        # "Nearest to me" is the whole point of handing over a location, so
+        # distance decides both the ordering and which places survive the cap.
+        # Sorting after the cap would rank an arbitrary alphabetical slice and
+        # could easily miss the closest shop on the screen.
+        #
+        # SQLite has no spatial functions, so a generous bounding box narrows
+        # it in SQL first and the exact distance is computed on what is left.
+        # Ordering alphabetically and slicing would be far cheaper and simply
+        # wrong.
+        south_r, west_r, north_r, east_r = bounding_box(origin[0], origin[1], NEAR_RADIUS_KM)
+        near = queryset.filter(
+            latitude__gte=south_r, latitude__lte=north_r,
+            longitude__gte=west_r, longitude__lte=east_r,
+        )[:MAX_DISTANCE_CANDIDATES]
+
+        scored = [
+            (road_km(origin[0], origin[1], float(p.latitude), float(p.longitude)), p)
+            for p in near
+        ]
+        # Favourites first, then genuinely nearest.
+        scored.sort(key=lambda row: (not row[1].is_favorite, row[0]))
+        places = [place for _, place in scored[:limit]]
+        distances = {place.pk: km for km, place in scored}
+    else:
+        # Favourites first so the cap never hides somewhere you actually use.
+        places = list(queryset.order_by("-is_favorite", "name")[:limit])
+        distances = {}
 
     fuel_type = request.GET.get("fuel", "")
     if fuel_type not in FuelType.values:
@@ -135,6 +178,9 @@ def places_json(request):
             "lng": float(place.longitude),
             "favorite": place.is_favorite,
             "hours": place.opening_hours,
+            "distance_km": (
+                str(distances[place.pk]) if place.pk in distances else None
+            ),
             "price": str(quote.price) if quote and quote.price else None,
             "tier": quote.tier if quote else None,
             "tier_label": quote.tier_label if quote else None,
@@ -148,6 +194,7 @@ def places_json(request):
         "total": total,
         "shown": len(payload),
         "truncated": total > len(payload),
+        "sorted_by": "distance" if origin else "name",
         "places": payload,
     })
 
