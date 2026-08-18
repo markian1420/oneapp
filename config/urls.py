@@ -13,5 +13,6 @@ urlpatterns = [
     path("map/", include("apps.places.urls")),
     path("fuel/", include("apps.fuel.urls")),
     path("grocery/", include("apps.grocery.urls")),
+    path("cards/", include("apps.cards.urls")),
     path("", include("apps.core.urls")),
 ]

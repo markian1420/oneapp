@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+  <form method="post" class="panel min-w-0">
+    {% csrf_token %}
+    <div class="panel-header">
+      <div class="min-w-0">
+        <p class="eyebrow">{% if creating %}New{% else %}Editing{% endif %}</p>
+        <p class="text-sm font-bold text-ink dark:text-white">Card</p>
+      </div>
+    </div>
+    <div class="panel-pad space-y-5">
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=form.name %}
+        {% include "partials/_field.html" with field=form.issuer %}
+        {% include "partials/_field.html" with field=form.network %}
+        {% include "partials/_field.html" with field=form.last_four %}
+        {% include "partials/_field.html" with field=form.statement_day %}
+        {% include "partials/_field.html" with field=form.due_days_after_statement %}
+        {% include "partials/_field.html" with field=form.annual_fee %}
+      </div>
+      {% include "partials/_field.html" with field=form.is_active %}
+      {% include "partials/_field.html" with field=form.notes %}
+
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" class="btn-primary">{% if creating %}Add card{% else %}Save changes{% endif %}</button>
+        <a href="{% url 'cards:wallet' %}" class="btn-ghost">Cancel</a>
+      </div>
+    </div>
+  </form>
+
+  <aside class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <p class="eyebrow">Never asked for</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        The full card number, the expiry date and the CVV. The app has no use for any
+        of them, so it does not store them and there is no field to enter them in. The
+        last four digits are optional and exist only to tell two cards apart.
+      </p>
+    </div>
+    <div class="panel panel-pad">
+      <p class="eyebrow">Statement day</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Optional, but it lets the comparison show how long each card gives you before
+        payment is due &mdash; a purchase made just after a statement cuts gets the
+        longest interest-free run.
+      </p>
+    </div>
+  </aside>
+</div>
+{% endblock %}

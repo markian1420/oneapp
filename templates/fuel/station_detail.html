@@ -18,6 +18,10 @@
       <span class="hidden sm:inline">{% if station.is_favorite %}Unpin{% else %}Pin{% endif %}</span>
     </button>
   </form>
+  <a href="{% url 'cards:which' %}?place={{ station.pk }}" class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="credit-card" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Which card?</span>
+  </a>
   <a href="{% url 'fuel:fillup_create' %}?place={{ station.pk }}" class="btn-primary btn-sm">
     {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
     Log a fill-up

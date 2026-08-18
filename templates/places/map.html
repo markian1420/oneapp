@@ -187,7 +187,10 @@
           ? '<p class="mt-1 text-xs font-bold text-brand-700 dark:text-brand-400">about ' + place.distance_km + ' km away</p>'
           : '') +
         (place.hours ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(place.hours) + '</p>' : '') +
-        '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + place.url + '">Open</a></p>'
+        '<p class="mt-2 flex gap-3">' +
+          '<a class="font-bold text-brand-700 underline" href="' + place.url + '">Open</a>' +
+          '<a class="font-bold text-brand-700 underline" href="/cards/which/?place=' + place.id + '">Which card?</a>' +
+        '</p>'
       );
   }
 
