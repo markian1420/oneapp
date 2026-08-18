@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ table.total|intcomma }} logged · &#8369;{{ totals.spent|default:0|floatformat:2|intcomma }} in total
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'spend:purchase_create' %}" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
+    Log a purchase
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  {% for row in by_category|slice:":4" %}
+    <div class="metric {% if forloop.first %}metric-primary{% endif %}">
+      <p class="eyebrow">{{ row.label }} this month</p>
+      <p class="metric-value">&#8369;{{ row.spent|floatformat:0|intcomma }}</p>
+      <p class="text-[12px] font-bold {% if forloop.first %}text-white/85{% else %}text-ink-muted dark:text-slate-400{% endif %}">
+        {% if row.change_pct is not None %}
+          {% if row.change > 0 %}&#9650; {{ row.change_pct }}%{% else %}&#9660; {{ row.change_pct }}%{% endif %} vs last month
+        {% else %}
+          {{ row.count }} purchase{{ row.count|pluralize }}
+        {% endif %}
+      </p>
+    </div>
+  {% endfor %}
+</div>
+
+<form method="get" class="panel panel-pad mb-5 flex flex-wrap items-end gap-3">
+  <label class="min-w-0">
+    <span class="form-label">Category</span>
+    <select name="category" class="form-control" data-autosubmit>
+      <option value="">All categories</option>
+      {% for value, label in categories %}
+        <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a href="{% url 'spend:purchases' %}" class="btn-ghost btn-sm">Reset</a>
+</form>
+
+{% if purchases %}
+  <div class="table-wrap">
+    <table class="table min-w-[720px]">
+      <thead>{% include "partials/_table_head.html" %}</thead>
+      <tbody>
+        {% for purchase in purchases %}
+          <tr>
+            <td class="whitespace-nowrap">{{ purchase.occurred_at|date:"d M Y" }}</td>
+            <td>
+              <a href="{% url 'spend:purchase_detail' purchase.pk %}"
+                 class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                {{ purchase.where }}
+              </a>
+              {% if purchase.items_disagree %}
+                <span class="ml-1 badge-warning">lines differ</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-[12px]">{{ purchase.get_category_display }}</td>
+            <td class="whitespace-nowrap text-[12px]">
+              {% if purchase.card %}{{ purchase.card.name }}{% else %}<span class="text-ink-muted dark:text-slate-500">&mdash;</span>{% endif %}
+            </td>
+            <td class="text-right mono font-bold">&#8369;{{ purchase.total|floatformat:2|intcomma }}</td>
+            <td class="whitespace-nowrap text-right">
+              <form method="post" action="{% url 'spend:purchase_delete' purchase.pk %}" class="inline"
+                    data-confirm="Delete this purchase and its lines?">
+                {% csrf_token %}
+                <button type="submit" class="btn-ghost btn-sm text-red-600 dark:text-red-400">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_table_pager.html" %}
+{% else %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">Nothing logged yet.</p>
+    <p class="mx-auto mt-1 max-w-xl text-sm text-ink-muted dark:text-slate-400">
+      Groceries, dining and clothes all land here. Fuel has its own screen because
+      litres and odometer readings mean something specific, but it is counted in the
+      totals above.
+    </p>
+    <a href="{% url 'spend:purchase_create' %}" class="btn-primary btn-sm mt-4">Log the first one</a>
+  </div>
+{% endif %}
+{% endblock %}
