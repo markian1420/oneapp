@@ -1,11 +1,14 @@
 # OneApp
 
-A personal budgeting and spend-analysis console. The first module is **Fuel**: a
-live map of Philippine petrol stations with a price layer, a fill-up log, and a
-comparison that answers the question the map exists for — *given where I am and
-what I drive, where should I actually refuel?*
+A personal budgeting and spend-analysis console.
 
-Grocery and utility modules are planned and slot into the same shell.
+**Fuel** maps Philippine petrol stations with a price layer, a fill-up log, and
+a comparison that answers the question the map exists for — *given where I am
+and what I drive, where should I actually refuel?*
+
+**Grocery** tracks commodity prices from the Department of Agriculture's Daily
+Price Index for NCR. A utilities module is planned and slots into the same
+shell.
 
 ---
 
@@ -103,6 +106,11 @@ OneApp/
 │       └── management/commands/
 │           ├── import_stations.py      # Pull stations from OpenStreetMap
 │           └── import_doe_advisory.py  # Load a DOE advisory spreadsheet
+│   └── grocery/
+│       ├── models.py               # Commodity, CommodityPrice
+│       ├── da_index.py             # DA Daily Price Index PDF parser (column geometry)
+│       └── management/commands/
+│           └── import_da_prices.py     # Fetch and load the DA daily index
 ├── assets/input.css                # Tailwind source (outside static/ on purpose)
 ├── config/                         # Settings, URLs, WSGI/ASGI
 ├── scripts/copy-vendor.mjs         # Vendors Leaflet + htmx into static/
@@ -211,6 +219,32 @@ station inside Rizal's boundary is in Rizal. A `--bbox` import has no boundary
 to derive from, so those stations fall back to whatever the tags admit to and
 may end up with no region, and therefore no advisory baseline.
 
+### Grocery commodity prices, from the DA
+
+The DA publishes a Daily Price Index for NCR covering ~160 agri-fishery
+commodities — rice, corn, legumes, fish, beef, pork, poultry, vegetables,
+spices, fruits — as the prevailing retail price across 33 named wet markets.
+Unlike the fuel side, this is a genuine daily feed.
+
+```powershell
+# The most recent weekday
+.\.venv\Scripts\python.exe manage.py import_da_prices
+
+# A specific day, plus the preceding fortnight, to build a series
+.\.venv\Scripts\python.exe manage.py import_da_prices --date 2026-08-17 --backfill 16
+
+# A PDF you already downloaded
+.\.venv\Scripts\python.exe manage.py import_da_prices --file Daily-Price-Index-August-17-2026.pdf
+```
+
+Weekends are skipped — the DA does not publish then. Re-running a day is safe;
+prices are keyed on commodity, region, date and source.
+
+The whole grocery dataset is **derived**, so it can be rebuilt from source at
+any time. If a parser change ever strands commodity records, deleting the
+`Commodity` and `CommodityPrice` tables and re-importing is a supported repair,
+and the importer prunes commodities left with no prices on every run.
+
 ### The DOE weekly advisory
 
 Two ways in. The screen is the reliable one:
@@ -246,12 +280,19 @@ Targeted runs, per module:
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py test apps.fuel
+.\.venv\Scripts\python.exe manage.py test apps.grocery
 ```
 
-42 tests covering brand normalisation, region mapping, the four price tiers,
-detour-aware ranking, fuel economy, fill-up arithmetic, the map endpoint's
-bounding box and cap, open-redirect refusal, and that every screen renders both
-empty and populated.
+70 tests. **Fuel (55)**: brand normalisation, region mapping, the four price
+tiers, detour-aware ranking, fuel economy, fill-up arithmetic, the map
+endpoint's bounding box and cap, open-redirect refusal, both importers, and
+that every screen renders empty and populated.
+
+**Grocery (15)**: the DA PDF parser — column splitting by geometry, `n/a`
+handling, wrapped cells, the methodology footer, and a regression for the
+layout drift described below. These use synthetic word coordinates rather than
+a checked-in PDF, since coordinates are the parser's actual input and a binary
+fixture makes failures much harder to read.
 
 Also worth running after settings changes:
 
@@ -313,6 +354,21 @@ in a second tile provider.
   there are no roles and data is not partitioned per user.
 - **Public Overpass instances rate-limit.** The importer backs off and retries
   across mirrors; a national import can still take a while.
+- **The DA index covers commodities, not shelf SKUs.** It prices "Pork Belly
+  (Liempo), Local" across NCR, not a specific cut at a specific supermarket. No
+  Philippine supermarket publishes shelf prices, so per-store grocery pricing
+  will depend on logged receipts, exactly as fuel does.
+- **The DA index is NCR only.** Regional offices publish their own bulletins in
+  different formats; only the NCR edition is parsed.
+- **About 3% of commodity labels carry wrapping artifacts** — e.g. a
+  specification fragment such as `diameter/bunch hd)` left on the label. Prices
+  and the commodity key are correct and stable across days, so series and
+  comparisons are unaffected; only the displayed text is imperfect.
+- **DA layout drifts between editions.** The 5 August 2026 edition sets its
+  price cells 3.12pt above the commodity baseline where the 17 August edition
+  aligns them. The parser tolerates 8pt against a 20.76pt row pitch. If a future
+  edition drifts further, the importer will report dropped rows rather than
+  silently losing them — treat any non-zero `DROPPED` count as a bug to fix.
 
 ## Troubleshooting
 

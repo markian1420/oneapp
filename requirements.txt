@@ -9,3 +9,8 @@ httpx==0.28.1
 
 # Reading DOE weekly advisory workbooks.
 openpyxl==3.1.5
+
+# Reading the DA Daily Price Index, which is published as a PDF. Chosen over a
+# plain text extractor because the parser works from word coordinates: the
+# columns in that table are only distinguishable by geometry.
+pdfplumber==0.11.10

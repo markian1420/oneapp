@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "widget_tweaks",
     "apps.core",
     "apps.fuel",
+    "apps.grocery",
 ]
 
 MIDDLEWARE = [
