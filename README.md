@@ -537,6 +537,10 @@ in a second tile provider.
 **The map is blank and markers are broken images.** `static/vendor/` is missing.
 `npm run build` vendors it; `npm run vendor` alone does just that part.
 
+**`database is locked` during an import.** SQLite allows one writer at a time,
+so two imports running at once will collide. Run them one after another, or move
+to Postgres via `DATABASE_URL` if you want them concurrent.
+
 **`import_places` reports "Overpass would not answer".** The public instances
 were busy — they answer with 504s or an HTML error page under load. It retries
 five times across both mirrors with backoff, then gives up on that area and

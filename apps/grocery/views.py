@@ -41,6 +41,7 @@ def commodities(request):
         Column("month", "30 days", align="right",
                note="Change against the nearest reading a month earlier."),
         Column("points", "Readings", order_by=("reading_count",), align="right"),
+        Column("actions", "", align="right"),
     ]
 
     table = build_table(

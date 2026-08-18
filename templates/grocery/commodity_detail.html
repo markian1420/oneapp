@@ -10,6 +10,11 @@
 {% endblock %}
 
 {% block topbar_actions %}
+  <a href="{% url 'spend:where' %}?category=grocery&q={{ commodity.name|urlencode }}"
+     class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="locate" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Where to buy</span>
+  </a>
   <form method="post" action="{% url 'grocery:commodity_track' commodity.pk %}">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -183,6 +188,17 @@
             <dd class="text-ink-muted dark:text-slate-400">{{ span.first|date:"d M Y" }}</dd></div>
         {% endif %}
       </dl>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">Buying this</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        This is the going rate across NCR. To find where to actually buy it, the
+        <a href="{% url 'spend:where' %}?category=grocery&q={{ commodity.name|urlencode }}"
+           class="font-bold text-brand-700 underline dark:text-brand-400">where to buy</a>
+        screen lists the markets and supermarkets nearest you &mdash; with this price
+        alongside as the benchmark.
+      </p>
     </div>
 
     <div class="panel panel-pad">
