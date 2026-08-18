@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}{{ place.display_name }} · OneApp{% endblock %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ place.get_kind_display }}{% if place.locality %} · {{ place.locality }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="{% url 'places:favorite' place.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" class="btn-ghost btn-sm">
+      {% include "partials/_icon.html" with name="star" class="h-4 w-4" %}
+      <span class="hidden sm:inline">{% if place.is_favorite %}Unpin{% else %}Pin{% endif %}</span>
+    </button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+
+  <section class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="eyebrow">{{ place.get_kind_display }}</p>
+          <p class="mt-1 text-xl font-black tracking-tight text-ink dark:text-white">
+            {{ place.display_name }}
+          </p>
+          {% if place.locality %}
+            <p class="mt-1 text-sm text-ink-muted dark:text-slate-400">{{ place.locality }}</p>
+          {% endif %}
+        </div>
+        {% if place.is_favorite %}<span class="badge-success shrink-0">Pinned</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">No prices here yet</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Fuel is the only kind of place the app can resolve a price for, because the
+        DOE publishes a weekly advisory to fall back on. No Philippine supermarket
+        or shop publishes shelf prices, so what a basket costs here is something
+        only a receipt can say &mdash; and basket logging is not built yet.
+      </p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        For produce and meat, the
+        <a href="{% url 'grocery:commodities' %}" class="font-bold text-brand-700 underline dark:text-brand-400">commodity prices</a>
+        screen carries the DA daily index for NCR, which is a fair reference for what
+        a stall should be asking.
+      </p>
+    </div>
+  </section>
+
+  <aside class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <p class="eyebrow">Details</p>
+      <dl class="mt-3 space-y-2.5 text-[13px]">
+        {% if place.brand %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Brand</dt>
+            <dd class="text-ink-muted dark:text-slate-400">{{ place.brand }}</dd></div>
+        {% endif %}
+        {% if place.street %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Street</dt>
+            <dd class="break-words text-ink-muted dark:text-slate-400">{{ place.street }}</dd></div>
+        {% endif %}
+        {% if place.opening_hours %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Opening hours</dt>
+            <dd class="break-words text-ink-muted dark:text-slate-400">{{ place.opening_hours }}</dd></div>
+        {% endif %}
+        {% if place.region %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Region</dt>
+            <dd class="text-ink-muted dark:text-slate-400">{{ place.region }}</dd></div>
+        {% endif %}
+        <div><dt class="font-bold text-ink-soft dark:text-slate-300">Coordinates</dt>
+          <dd class="mono text-ink-muted dark:text-slate-400">{{ place.latitude }}, {{ place.longitude }}</dd></div>
+      </dl>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        <a href="https://www.google.com/maps/dir/?api=1&amp;destination={{ place.latitude }},{{ place.longitude }}"
+           target="_blank" rel="noopener" class="btn-ghost btn-sm">Directions</a>
+        <a href="{{ place.osm_url }}" target="_blank" rel="noopener" class="btn-ghost btn-sm">View on OSM</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

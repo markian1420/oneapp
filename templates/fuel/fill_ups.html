@@ -65,9 +65,9 @@
           <tr>
             <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y, H:i" }}</td>
             <td>
-              <a href="{% url 'fuel:station_detail' fill_up.station.pk %}"
+              <a href="{% url 'fuel:station_detail' fill_up.place.pk %}"
                  class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
-                {{ fill_up.station.display_name }}
+                {{ fill_up.place.display_name }}
               </a>
               <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ fill_up.vehicle.name }}</span>
             </td>

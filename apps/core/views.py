@@ -11,8 +11,9 @@ from django.db.models import Avg, Count, Sum
 from django.shortcuts import render
 from django.utils import timezone
 
-from apps.fuel.models import DOEAdvisory, FillUp, PriceObservation, Station
+from apps.fuel.models import DOEAdvisory, FillUp, PriceObservation
 from apps.fuel.services import fuel_economy, week_start
+from apps.places.models import Place, PlaceKind
 from apps.grocery.models import CommodityPrice
 from apps.grocery.services import biggest_movers
 
@@ -64,11 +65,11 @@ def home(request):
     # How much of the map actually has a price behind it. Stated plainly on the
     # dashboard because it is the honest caveat on every comparison the app
     # makes: no live feed exists, so coverage is whatever we have gathered.
-    station_count = Station.objects.count()
+    station_count = Place.objects.filter(kind=PlaceKind.FUEL).count()
     fresh_cutoff = now - timedelta(days=14)
     priced_stations = (
         PriceObservation.objects.filter(observed_at__gte=fresh_cutoff)
-        .values("station_id")
+        .values("place_id")
         .distinct()
         .count()
     )
@@ -77,7 +78,7 @@ def home(request):
     advisory_latest = DOEAdvisory.objects.order_by("-week_of").first()
 
     recent = (
-        FillUp.objects.select_related("station", "vehicle")
+        FillUp.objects.select_related("place", "vehicle")
         .order_by("-filled_at")[:8]
     )
 
@@ -87,7 +88,7 @@ def home(request):
 
     by_brand = (
         FillUp.objects.filter(filled_at__gte=year_start)
-        .values("station__brand")
+        .values("place__brand")
         .annotate(spend=Sum("total_cost"), visits=Count("id"),
                   avg_price=Avg("price_per_liter"))
         .order_by("-spend")[:6]

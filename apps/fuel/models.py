@@ -16,6 +16,8 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from apps.places.models import Place
+
 
 class FuelType(models.TextChoices):
     """Grades sold at Philippine pumps.
@@ -40,94 +42,6 @@ class PriceTier(models.TextChoices):
     UNKNOWN = "unknown", "No price"
 
 
-class Station(models.Model):
-    """A fuel station, sourced from OpenStreetMap.
-
-    Identity is the OSM element, not the name: brands rename outlets and two
-    stations on opposite corners of the same junction share a name. Keeping the
-    OSM id means a re-import updates a station in place instead of duplicating
-    it, and it is the only stable handle back to the upstream data.
-    """
-
-    class OSMType(models.TextChoices):
-        NODE = "node", "Node"
-        WAY = "way", "Way"
-        RELATION = "relation", "Relation"
-
-    osm_type = models.CharField(max_length=8, choices=OSMType.choices)
-    osm_id = models.BigIntegerField()
-
-    name = models.CharField(max_length=200, blank=True)
-    brand = models.CharField(
-        max_length=60,
-        blank=True,
-        db_index=True,
-        help_text="Canonical brand, e.g. Petron. Normalised on import.",
-    )
-    brand_raw = models.CharField(
-        max_length=120,
-        blank=True,
-        help_text="Whatever OSM had, kept so a bad normalisation can be traced.",
-    )
-
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
-
-    street = models.CharField(max_length=200, blank=True)
-    city = models.CharField(max_length=120, blank=True, db_index=True)
-    province = models.CharField(max_length=120, blank=True)
-    region = models.CharField(
-        max_length=40,
-        blank=True,
-        db_index=True,
-        help_text="DOE region code, derived from the province. Joins to advisories.",
-    )
-
-    opening_hours = models.CharField(max_length=200, blank=True)
-    is_favorite = models.BooleanField(
-        default=False,
-        help_text="Pinned to the top of comparisons - your usual stops.",
-    )
-
-    first_imported_at = models.DateTimeField(auto_now_add=True)
-    last_seen_at = models.DateTimeField(
-        default=timezone.now,
-        help_text="Last import that still found this station in OSM.",
-    )
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["osm_type", "osm_id"], name="uniq_station_osm_element"
-            )
-        ]
-        indexes = [
-            # The map queries a bounding box on every pan, so both coordinates
-            # need to be indexed together.
-            models.Index(fields=["latitude", "longitude"], name="idx_station_latlng"),
-            models.Index(fields=["brand", "city"], name="idx_station_brand_city"),
-        ]
-        ordering = ["name"]
-
-    def __str__(self) -> str:
-        return self.display_name
-
-    @property
-    def display_name(self) -> str:
-        """Something readable even when OSM only tagged one of the two fields."""
-        if self.name and self.brand and self.brand.lower() not in self.name.lower():
-            return f"{self.brand} - {self.name}"
-        return self.name or self.brand or f"Station {self.osm_id}"
-
-    @property
-    def osm_url(self) -> str:
-        return f"https://www.openstreetmap.org/{self.osm_type}/{self.osm_id}"
-
-    @property
-    def locality(self) -> str:
-        return ", ".join(part for part in (self.city, self.province) if part)
-
-
 class PriceObservation(models.Model):
     """One price seen at one station, at one moment.
 
@@ -139,8 +53,8 @@ class PriceObservation(models.Model):
         FILL_UP = "fill_up", "From a fill-up"
         SPOTTED = "spotted", "Price board"
 
-    station = models.ForeignKey(
-        Station, on_delete=models.CASCADE, related_name="observations"
+    place = models.ForeignKey(
+        Place, on_delete=models.CASCADE, related_name="fuel_observations"
     )
     fuel_type = models.CharField(max_length=20, choices=FuelType.choices)
     price = models.DecimalField(
@@ -160,14 +74,14 @@ class PriceObservation(models.Model):
             # "Latest price for this station and grade" is the single hottest
             # read in the app - it runs once per marker on the map.
             models.Index(
-                fields=["station", "fuel_type", "-observed_at"],
+                fields=["place", "fuel_type", "-observed_at"],
                 name="idx_obs_station_fuel_time",
             ),
         ]
         ordering = ["-observed_at"]
 
     def __str__(self) -> str:
-        return f"{self.station} {self.get_fuel_type_display()} @ {self.price}"
+        return f"{self.place} {self.get_fuel_type_display()} @ {self.price}"
 
     @property
     def is_fresh(self) -> bool:
@@ -269,8 +183,8 @@ class FillUp(models.Model):
     vehicle = models.ForeignKey(
         Vehicle, on_delete=models.PROTECT, related_name="fill_ups"
     )
-    station = models.ForeignKey(
-        Station, on_delete=models.PROTECT, related_name="fill_ups"
+    place = models.ForeignKey(
+        Place, on_delete=models.PROTECT, related_name="fill_ups"
     )
     fuel_type = models.CharField(max_length=20, choices=FuelType.choices)
 
@@ -308,12 +222,12 @@ class FillUp(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["-filled_at"], name="idx_fillup_time"),
-            models.Index(fields=["station", "-filled_at"], name="idx_fillup_station"),
+            models.Index(fields=["place", "-filled_at"], name="idx_fillup_place"),
         ]
         ordering = ["-filled_at"]
 
     def __str__(self) -> str:
-        return f"{self.filled_at:%Y-%m-%d} {self.station} {self.liters}L"
+        return f"{self.filled_at:%Y-%m-%d} {self.place} {self.liters}L"
 
     def sync_observation(self) -> PriceObservation:
         """Mirror this fill-up into the price layer.
@@ -323,7 +237,7 @@ class FillUp(models.Model):
         another table is the kind of thing that surprises you later.
         """
         values = {
-            "station": self.station,
+            "place": self.place,
             "fuel_type": self.fuel_type,
             "price": self.price_per_liter,
             "observed_at": self.filled_at,

@@ -22,10 +22,12 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .brands import normalise_brand
+from apps.places.brands import normalise_brand
 from .forms import FillUpForm
-from .models import DOEAdvisory, FillUp, PriceObservation, PriceTier, Station, Vehicle
-from .regions import region_for
+from apps.places.models import Place, PlaceKind
+
+from .models import DOEAdvisory, FillUp, PriceObservation, PriceTier, Vehicle
+from apps.places.regions import region_for
 from .services import (
     fuel_economy,
     haversine_km,
@@ -35,10 +37,12 @@ from .services import (
 )
 
 
-def make_station(**overrides) -> Station:
+def make_station(**overrides) -> Place:
+    """A fuel place. Named for what it is in this module's language."""
     values = {
-        "osm_type": Station.OSMType.NODE,
-        "osm_id": overrides.pop("osm_id", Station.objects.count() + 1),
+        "kind": PlaceKind.FUEL,
+        "osm_type": Place.OSMType.NODE,
+        "osm_id": overrides.pop("osm_id", Place.objects.count() + 1),
         "name": "Test Station",
         "brand": "Petron",
         "latitude": Decimal("14.580000"),
@@ -47,7 +51,7 @@ def make_station(**overrides) -> Station:
         "region": "NCR",
     }
     values.update(overrides)
-    return Station.objects.create(**values)
+    return Place.objects.create(**values)
 
 
 class BrandNormalisationTests(TestCase):
@@ -92,7 +96,7 @@ class PriceResolutionTests(TestCase):
 
     def test_a_fresh_logged_price_wins(self):
         PriceObservation.objects.create(
-            station=self.station, fuel_type="gas_95", price=Decimal("70.00")
+            place=self.station, fuel_type="gas_95", price=Decimal("70.00")
         )
         DOEAdvisory.objects.create(
             week_of=self.week, region="NCR", brand="Petron",
@@ -122,7 +126,7 @@ class PriceResolutionTests(TestCase):
 
     def test_current_regional_price_beats_a_stale_receipt(self):
         PriceObservation.objects.create(
-            station=self.station, fuel_type="gas_95", price=Decimal("70.00"),
+            place=self.station, fuel_type="gas_95", price=Decimal("70.00"),
             observed_at=timezone.now() - timedelta(days=45),
         )
         DOEAdvisory.objects.create(
@@ -136,7 +140,7 @@ class PriceResolutionTests(TestCase):
 
     def test_a_stale_receipt_is_still_better_than_nothing(self):
         PriceObservation.objects.create(
-            station=self.station, fuel_type="gas_95", price=Decimal("70.00"),
+            place=self.station, fuel_type="gas_95", price=Decimal("70.00"),
             observed_at=timezone.now() - timedelta(days=45),
         )
         quote = quotes_for([self.station], "gas_95")[self.station.pk]
@@ -159,7 +163,7 @@ class PriceResolutionTests(TestCase):
     def test_resolution_stays_at_two_queries_however_many_stations(self):
         for index in range(25):
             make_station(osm_id=1000 + index, name=f"Station {index}")
-        stations = list(Station.objects.all())
+        stations = list(Place.objects.all())
 
         # One query for observations, one for advisories. A per-station lookup
         # here would be a query per pin on the map.
@@ -183,7 +187,7 @@ class ScoringTests(TestCase):
             liters=Decimal("40"), km_per_liter=Decimal("10"),
             origin=(14.58, 121.06),
         )
-        by_name = {o.station.name: o for o in options}
+        by_name = {o.place.name: o for o in options}
         self.assertEqual(by_name["Near"].distance_km, Decimal("0.00"))
         self.assertGreater(by_name["Far"].distance_km, Decimal("10"))
 
@@ -191,10 +195,10 @@ class ScoringTests(TestCase):
         # 2 pesos a litre cheaper on 40 litres is 80 pesos. Put it far enough
         # away and the fuel burned getting there eats the difference.
         PriceObservation.objects.create(
-            station=self.far, fuel_type="gas_95", price=Decimal("76.00")
+            place=self.far, fuel_type="gas_95", price=Decimal("76.00")
         )
         PriceObservation.objects.create(
-            station=self.near, fuel_type="gas_95", price=Decimal("78.00")
+            place=self.near, fuel_type="gas_95", price=Decimal("78.00")
         )
 
         options = score_options(
@@ -202,22 +206,22 @@ class ScoringTests(TestCase):
             liters=Decimal("40"), km_per_liter=Decimal("4"),
             origin=(14.58, 121.06),
         )
-        self.assertEqual(options[0].station.name, "Near")
+        self.assertEqual(options[0].place.name, "Near")
         self.assertGreater(options[1].detour_cost, Decimal("80"))
 
     def test_the_cheaper_station_wins_when_the_detour_is_small(self):
         PriceObservation.objects.create(
-            station=self.far, fuel_type="gas_95", price=Decimal("70.00")
+            place=self.far, fuel_type="gas_95", price=Decimal("70.00")
         )
         PriceObservation.objects.create(
-            station=self.near, fuel_type="gas_95", price=Decimal("78.00")
+            place=self.near, fuel_type="gas_95", price=Decimal("78.00")
         )
         options = score_options(
             [self.near, self.far], "gas_95",
             liters=Decimal("40"), km_per_liter=Decimal("14"),
             origin=(14.58, 121.06),
         )
-        self.assertEqual(options[0].station.name, "Far")
+        self.assertEqual(options[0].place.name, "Far")
 
     def test_stations_with_no_price_sort_last_but_are_not_dropped(self):
         priceless = make_station(osm_id=3, name="Unknown", brand="Nobody", region="")
@@ -226,7 +230,7 @@ class ScoringTests(TestCase):
             liters=Decimal("40"), km_per_liter=Decimal("10"),
         )
         self.assertEqual(len(options), 2)
-        self.assertEqual(options[-1].station.name, "Unknown")
+        self.assertEqual(options[-1].place.name, "Unknown")
         self.assertIsNone(options[-1].effective_cost)
 
     def test_haversine_matches_a_known_distance(self):
@@ -242,7 +246,7 @@ class FuelEconomyTests(TestCase):
 
     def _fill(self, odometer, liters, when, full=True):
         return FillUp.objects.create(
-            vehicle=self.vehicle, station=self.station, fuel_type="gas_95",
+            vehicle=self.vehicle, place=self.station, fuel_type="gas_95",
             filled_at=when, liters=Decimal(liters),
             price_per_liter=Decimal("78.00"),
             total_cost=Decimal(liters) * Decimal("78.00"),
@@ -275,7 +279,7 @@ class FillUpFormTests(TestCase):
         self.station = make_station()
         self.base = {
             "vehicle": self.vehicle.pk,
-            "station": self.station.pk,
+            "place": self.station.pk,
             "fuel_type": "gas_95",
             "filled_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
             "is_full_tank": "on",
@@ -320,7 +324,7 @@ class FillUpFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         fill_up = form.save()
 
-        observation = PriceObservation.objects.get(station=self.station)
+        observation = PriceObservation.objects.get(place=self.station)
         self.assertEqual(observation.price, Decimal("78.500"))
         self.assertEqual(observation.source, PriceObservation.Source.FILL_UP)
         self.assertEqual(fill_up.observation, observation)
@@ -447,7 +451,7 @@ class ScreenSmokeTests(TestCase):
         vehicle = Vehicle.objects.create(name="Car", is_default=True)
         station = make_station()
         fill_up = FillUp.objects.create(
-            vehicle=vehicle, station=station, fuel_type="gas_95",
+            vehicle=vehicle, place=station, fuel_type="gas_95",
             liters=Decimal("40"), price_per_liter=Decimal("78.5"),
             total_cost=Decimal("3140"), odometer_km=10000,
         )
@@ -593,49 +597,49 @@ class StationImportTests(TestCase):
 
     def _run(self, **kwargs):
         out = StringIO()
-        with mock.patch("apps.fuel.management.commands.import_stations.fetch_area",
+        with mock.patch("apps.places.management.commands.import_places.fetch_area",
                         return_value=self.ELEMENTS):
-            call_command("import_stations", area=["NCR"], stdout=out, stderr=StringIO(),
-                         **kwargs)
+            call_command("import_places", area=["NCR"], kind=["fuel"], stdout=out,
+                         stderr=StringIO(), **kwargs)
         return out.getvalue()
 
     def test_nodes_and_polygons_both_land_and_brands_are_normalised(self):
         self._run()
 
-        self.assertEqual(Station.objects.count(), 2)
-        seaoil = Station.objects.get(osm_id=1)
+        self.assertEqual(Place.objects.count(), 2)
+        seaoil = Place.objects.get(osm_id=1)
         self.assertEqual(seaoil.brand, "Seaoil")
         self.assertEqual(seaoil.brand_raw, "SEAOIL")
         self.assertEqual(seaoil.city, "Pasig")
-        self.assertEqual(Station.objects.get(osm_id=2).brand, "Cleanfuel")
+        self.assertEqual(Place.objects.get(osm_id=2).brand, "Cleanfuel")
 
     def test_region_comes_from_the_area_queried_not_the_tags(self):
         # Neither element carries addr:province, which is the normal case.
         self._run()
         self.assertEqual(
-            set(Station.objects.values_list("region", flat=True)), {"NCR"}
+            set(Place.objects.values_list("region", flat=True)), {"NCR"}
         )
 
     def test_an_element_without_coordinates_is_skipped_and_counted(self):
         output = self._run()
-        self.assertFalse(Station.objects.filter(osm_id=3).exists())
+        self.assertFalse(Place.objects.filter(osm_id=3).exists())
         self.assertIn("1 skipped", output)
 
     def test_reimporting_updates_in_place_instead_of_duplicating(self):
         self._run()
         self._run()
-        self.assertEqual(Station.objects.count(), 2)
+        self.assertEqual(Place.objects.count(), 2)
 
     def test_a_dry_run_writes_nothing(self):
         output = self._run(dry_run=True)
-        self.assertEqual(Station.objects.count(), 0)
+        self.assertEqual(Place.objects.count(), 0)
         self.assertIn("Dry run", output)
 
     def test_a_pinned_station_keeps_its_pin_across_a_reimport(self):
         self._run()
-        station = Station.objects.get(osm_id=1)
+        station = Place.objects.get(osm_id=1)
         station.is_favorite = True
         station.save(update_fields=["is_favorite"])
 
         self._run()
-        self.assertTrue(Station.objects.get(osm_id=1).is_favorite)
+        self.assertTrue(Place.objects.get(osm_id=1).is_favorite)

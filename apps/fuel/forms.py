@@ -7,8 +7,10 @@ from decimal import Decimal, InvalidOperation
 from django import forms
 from django.utils import timezone
 
-from .models import DOEAdvisory, FillUp, FuelType, PriceObservation, Station, Vehicle
-from .regions import REGION_NAMES
+from apps.places.models import Place, PlaceKind
+from apps.places.regions import REGION_NAMES
+
+from .models import DOEAdvisory, FillUp, FuelType, PriceObservation, Vehicle
 from .services import week_start
 
 
@@ -52,7 +54,7 @@ class FillUpForm(forms.ModelForm):
     class Meta:
         model = FillUp
         fields = [
-            "vehicle", "station", "fuel_type", "filled_at",
+            "vehicle", "place", "fuel_type", "filled_at",
             "liters", "price_per_liter", "total_cost",
             "odometer_km", "is_full_tank", "notes",
         ]
@@ -81,9 +83,9 @@ class FillUpForm(forms.ModelForm):
         for name in ("liters", "price_per_liter", "total_cost"):
             self.fields[name].required = False
 
-        self.fields["station"].queryset = Station.objects.order_by(
-            "-is_favorite", "name"
-        )
+        self.fields["place"].queryset = Place.objects.filter(
+            kind=PlaceKind.FUEL
+        ).order_by("-is_favorite", "name")
         self.fields["vehicle"].queryset = Vehicle.objects.all()
 
         if not self.instance.pk:
@@ -149,15 +151,15 @@ class PriceReportForm(forms.ModelForm):
         }
         labels = {"price": "Price per litre"}
 
-    def __init__(self, *args, station=None, **kwargs):
+    def __init__(self, *args, place=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.station = station
+        self.place = place
         if not self.instance.pk:
             self.fields["observed_at"].initial = timezone.localtime()
 
     def save(self, commit=True):
         observation = super().save(commit=False)
-        observation.station = self.station
+        observation.place = self.place
         observation.source = PriceObservation.Source.SPOTTED
         if commit:
             observation.save()

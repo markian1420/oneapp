@@ -488,6 +488,48 @@
   .dark .chart-fade-top    { stop-color: var(--color-brand-400); stop-opacity: 0.22; }
   .dark .chart-fade-bottom { stop-color: var(--color-brand-400); stop-opacity: 0.02; }
 
+
+  /* ------------------------------------------------------- Multi-kind pins */
+  /* Every kind of place shares one map, so the pin has to say what it is at a
+     glance. The icon carries the meaning and the colour reinforces it - the
+     map stays readable in greyscale and for a colourblind reader, where "the
+     green one" is not a usable instruction. */
+  .kpin {
+    @apply grid h-7 w-7 place-items-center rounded-full border-2 border-white
+           shadow-md transition;
+  }
+
+  .dark .kpin { @apply border-night-alt; }
+
+  .kpin-brand  { @apply bg-brand-600 text-white; }
+  .kpin-amber  { @apply bg-amber-500 text-white; }
+  .kpin-sky    { @apply bg-sky-600 text-white; }
+  .kpin-indigo { @apply bg-indigo-600 text-white; }
+  .kpin-red    { @apply bg-red-600 text-white; }
+  .kpin-rose   { @apply bg-rose-600 text-white; }
+  .kpin-violet { @apply bg-violet-600 text-white; }
+  .kpin-teal   { @apply bg-teal-600 text-white; }
+
+  /* A fuel pin carries a price, so it is a pill rather than a disc. */
+  .kpin-priced {
+    @apply h-auto w-auto whitespace-nowrap rounded-full px-2 py-0.5
+           text-[11px] font-extrabold;
+  }
+
+  .kpin-favorite { @apply ring-2 ring-brand-300 ring-offset-1; }
+
+  .layer-toggle {
+    @apply flex cursor-pointer items-center gap-2 rounded-[var(--radius-control)]
+           border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-bold
+           text-ink-soft transition hover:border-brand-300;
+  }
+
+  .dark .layer-toggle {
+    @apply border-night-line bg-night-alt text-slate-300 hover:border-brand-400;
+  }
+
+  .layer-dot { @apply h-2.5 w-2.5 shrink-0 rounded-full; }
+
   /* ------------------------------------------------------------- Utilities */
   .mono {
     @apply font-mono text-[13px] tracking-tight;

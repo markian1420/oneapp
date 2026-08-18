@@ -19,9 +19,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.fuel.brands import normalise_brand
+from apps.places.brands import normalise_brand
 from apps.fuel.models import DOEAdvisory, FuelType
-from apps.fuel.regions import REGION_NAMES
+from apps.places.regions import REGION_NAMES
 from apps.fuel.services import week_start
 
 # Column headings accepted for each field, lowercased. Spreadsheets from the

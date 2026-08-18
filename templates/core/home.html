@@ -84,9 +84,9 @@
                 <tr>
                   <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y" }}</td>
                   <td>
-                    <a href="{% url 'fuel:station_detail' fill_up.station.pk %}"
+                    <a href="{% url 'fuel:station_detail' fill_up.place.pk %}"
                        class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
-                      {{ fill_up.station.display_name }}
+                      {{ fill_up.place.display_name }}
                     </a>
                   </td>
                   <td class="whitespace-nowrap">{{ fill_up.get_fuel_type_display }}</td>
@@ -130,7 +130,7 @@
             <tbody>
               {% for row in by_brand %}
                 <tr>
-                  <td class="font-bold text-ink dark:text-slate-200">{{ row.station__brand|default:"Unbranded" }}</td>
+                  <td class="font-bold text-ink dark:text-slate-200">{{ row.place__brand|default:"Unbranded" }}</td>
                   <td class="text-right mono">{{ row.visits }}</td>
                   <td class="text-right mono">{{ row.avg_price|floatformat:2 }}</td>
                   <td class="text-right mono font-bold">&#8369;{{ row.spend|floatformat:2|intcomma }}</td>

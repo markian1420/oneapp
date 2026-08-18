@@ -10,6 +10,7 @@ urlpatterns = [
         name="login",
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("map/", include("apps.places.urls")),
     path("fuel/", include("apps.fuel.urls")),
     path("grocery/", include("apps.grocery.urls")),
     path("", include("apps.core.urls")),

@@ -1,22 +1,14 @@
 from django.contrib import admin
 
-from .models import DOEAdvisory, FillUp, PriceObservation, Station, Vehicle
-
-
-@admin.register(Station)
-class StationAdmin(admin.ModelAdmin):
-    list_display = ("display_name", "brand", "city", "region", "is_favorite")
-    list_filter = ("brand", "region", "is_favorite")
-    search_fields = ("name", "brand", "city", "street")
-    readonly_fields = ("osm_type", "osm_id", "first_imported_at", "last_seen_at")
+from .models import DOEAdvisory, FillUp, PriceObservation, Vehicle
 
 
 @admin.register(PriceObservation)
 class PriceObservationAdmin(admin.ModelAdmin):
-    list_display = ("station", "fuel_type", "price", "observed_at", "source")
+    list_display = ("place", "fuel_type", "price", "observed_at", "source")
     list_filter = ("fuel_type", "source")
-    search_fields = ("station__name", "station__brand")
-    autocomplete_fields = ("station",)
+    search_fields = ("place__name", "place__brand")
+    autocomplete_fields = ("place",)
 
 
 @admin.register(DOEAdvisory)
@@ -33,9 +25,9 @@ class VehicleAdmin(admin.ModelAdmin):
 @admin.register(FillUp)
 class FillUpAdmin(admin.ModelAdmin):
     list_display = (
-        "filled_at", "station", "vehicle", "fuel_type",
+        "filled_at", "place", "vehicle", "fuel_type",
         "liters", "price_per_liter", "total_cost",
     )
     list_filter = ("fuel_type", "vehicle", "is_full_tank")
-    autocomplete_fields = ("station",)
+    autocomplete_fields = ("place",)
     date_hierarchy = "filled_at"

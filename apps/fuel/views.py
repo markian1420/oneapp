@@ -23,9 +23,21 @@ from apps.core.tables import Column, build_table
 from apps.core.views import module
 
 from .forms import AdvisoryEntryForm, FillUpForm, PriceReportForm, VehicleForm
-from .models import DOEAdvisory, FillUp, FuelType, Station, Vehicle
-from .regions import REGION_NAMES
+from apps.places.models import Place, PlaceKind
+from apps.places.regions import REGION_NAMES
+
+from .models import DOEAdvisory, FillUp, FuelType, Vehicle
 from .services import fuel_economy, quotes_for, score_options, week_start
+
+def fuel_places():
+    """Places of kind fuel.
+
+    Every place now lives in one table so the map can draw fuel, markets and
+    shops together; the fuel module still only ever means the fuel ones, and
+    forgetting this filter would quietly offer you a Jollibee to refuel at.
+    """
+    return Place.objects.filter(kind=PlaceKind.FUEL)
+
 
 # Metro Manila. Only used the first time, before there is a fill-up to centre on.
 DEFAULT_CENTER = (14.5995, 120.9842)
@@ -65,10 +77,10 @@ def station_map(request):
     vehicle = Vehicle.objects.filter(is_default=True).first() or Vehicle.objects.first()
 
     last_fill_up = (
-        FillUp.objects.select_related("station").order_by("-filled_at").first()
+        FillUp.objects.select_related("place").order_by("-filled_at").first()
     )
     if last_fill_up:
-        center = (float(last_fill_up.station.latitude), float(last_fill_up.station.longitude))
+        center = (float(last_fill_up.place.latitude), float(last_fill_up.place.longitude))
     else:
         center = DEFAULT_CENTER
 
@@ -77,7 +89,7 @@ def station_map(request):
         "fuel_choices": FuelType.choices,
         "vehicle": vehicle,
         "brands": (
-            Station.objects.exclude(brand="")
+            fuel_places().exclude(brand="")
             .values_list("brand", flat=True)
             .order_by("brand")
             .distinct()
@@ -89,7 +101,7 @@ def station_map(request):
         "default_liters": (
             vehicle.tank_capacity_l if vehicle else Decimal("40")
         ),
-        "station_count": Station.objects.count(),
+        "station_count": fuel_places().count(),
     }
     return render(request, "fuel/map.html", context)
 
@@ -112,7 +124,7 @@ def stations_json(request):
                             status=400)
 
     fuel = _fuel_choice(request)
-    queryset = Station.objects.filter(
+    queryset = fuel_places().filter(
         latitude__gte=south, latitude__lte=north,
         longitude__gte=west, longitude__lte=east,
     )
@@ -153,13 +165,13 @@ def stations_json(request):
         "liters": str(liters),
         "stations": [
             {
-                "id": option.station.pk,
-                "name": option.station.display_name,
-                "brand": option.station.brand,
-                "city": option.station.locality,
-                "lat": float(option.station.latitude),
-                "lng": float(option.station.longitude),
-                "favorite": option.station.is_favorite,
+                "id": option.place.pk,
+                "name": option.place.display_name,
+                "brand": option.place.brand,
+                "city": option.place.locality,
+                "lat": float(option.place.latitude),
+                "lng": float(option.place.longitude),
+                "favorite": option.place.is_favorite,
                 "price": str(option.quote.price) if option.quote.price else None,
                 "tier": option.quote.tier,
                 "tier_label": option.quote.tier_label,
@@ -173,7 +185,7 @@ def stations_json(request):
                     str(option.saving_vs_worst)
                     if option.saving_vs_worst is not None else None
                 ),
-                "url": f"/fuel/stations/{option.station.pk}/",
+                "url": f"/fuel/stations/{option.place.pk}/",
             }
             for option in options
         ],
@@ -188,7 +200,7 @@ def stations(request):
     brand = request.GET.get("brand", "")
     region = request.GET.get("region", "")
 
-    queryset = Station.objects.all()
+    queryset = fuel_places()
     if search:
         queryset = queryset.filter(
             Q(name__icontains=search)
@@ -241,7 +253,7 @@ def stations(request):
         "region": region,
         "regions": REGION_NAMES,
         "brands": (
-            Station.objects.exclude(brand="")
+            fuel_places().exclude(brand="")
             .values_list("brand", flat=True).order_by("brand").distinct()
         ),
         "favorites_only": request.GET.get("favorites") == "1",
@@ -258,21 +270,21 @@ def stations(request):
 @login_required
 @module("fuel_stations", "Station")
 def station_detail(request, pk: int):
-    station = get_object_or_404(Station, pk=pk)
+    station = get_object_or_404(Place, pk=pk, kind=PlaceKind.FUEL)
     fuel = _fuel_choice(request)
 
     if request.method == "POST":
-        form = PriceReportForm(request.POST, station=station)
+        form = PriceReportForm(request.POST, place=station)
         if form.is_valid():
             form.save()
             messages.success(request, "Price noted.")
             return redirect("fuel:station_detail", pk=station.pk)
         messages.error(request, "That price could not be saved.")
     else:
-        form = PriceReportForm(station=station)
+        form = PriceReportForm(place=station)
 
     history = (
-        station.observations.filter(fuel_type=fuel).order_by("-observed_at")[:30]
+        station.fuel_observations.filter(fuel_type=fuel).order_by("-observed_at")[:30]
     )
     fill_ups = station.fill_ups.select_related("vehicle").order_by("-filled_at")[:10]
     spend = station.fill_ups.aggregate(
@@ -305,7 +317,7 @@ def station_detail(request, pk: int):
 @login_required
 @require_POST
 def station_favorite(request, pk: int):
-    station = get_object_or_404(Station, pk=pk)
+    station = get_object_or_404(Place, pk=pk, kind=PlaceKind.FUEL)
     station.is_favorite = not station.is_favorite
     station.save(update_fields=["is_favorite"])
     messages.success(
@@ -324,7 +336,7 @@ def station_favorite(request, pk: int):
 @login_required
 @module("fuel_fillups", "Fill-ups")
 def fill_ups(request):
-    queryset = FillUp.objects.select_related("station", "vehicle")
+    queryset = FillUp.objects.select_related("place", "vehicle")
 
     vehicle = request.GET.get("vehicle", "")
     if vehicle.isdigit():
@@ -332,7 +344,7 @@ def fill_ups(request):
 
     columns = [
         Column("filled_at", "When", order_by=("filled_at",)),
-        Column("station", "Station", order_by=("station__name",)),
+        Column("station", "Station", order_by=("place__name",)),
         Column("fuel_type", "Grade", order_by=("fuel_type",)),
         Column("liters", "Litres", order_by=("liters",), align="right"),
         Column("price", "Per litre", order_by=("price_per_liter",), align="right"),
@@ -366,14 +378,14 @@ def fill_up_create(request):
     if not Vehicle.objects.exists():
         messages.warning(request, "Add a vehicle first - a fill-up belongs to one.")
         return redirect("fuel:vehicle_create")
-    if not Station.objects.exists():
+    if not fuel_places().exists():
         messages.warning(
             request,
             "No stations imported yet. Run: python manage.py import_stations --area NCR",
         )
         return redirect("fuel:stations")
 
-    initial_station = request.GET.get("station")
+    initial_place = request.GET.get("place")
     if request.method == "POST":
         form = FillUpForm(request.POST)
         if form.is_valid():
@@ -387,7 +399,7 @@ def fill_up_create(request):
         messages.error(request, "Check the highlighted fields.")
     else:
         form = FillUpForm(
-            initial={"station": initial_station} if initial_station else None
+            initial={"place": initial_place} if initial_place else None
         )
 
     return render(

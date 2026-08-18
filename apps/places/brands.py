@@ -1,5 +1,5 @@
 """
-Brand normalisation for OpenStreetMap fuel stations.
+Brand normalisation for OpenStreetMap places.
 
 OSM is crowd-tagged, so the same chain arrives as "SEAOIL", "Seaoil", "Sea Oil"
 and "SEAOIL Philippines". Left alone that fragments every brand filter and
@@ -51,6 +51,48 @@ CANONICAL_BRANDS = {
     "seaoilphilippines": "Seaoil",
     "petronascorporation": "Petronas",
     "petronas": "Petronas",
+
+    # Supermarkets and department stores.
+    "sm": "SM", "smsupermarket": "SM Supermarket", "smmarkets": "SM Supermarket",
+    "smhypermarket": "SM Hypermarket", "smsavemore": "Savemore",
+    "savemore": "Savemore", "smdepartmentstore": "The SM Store",
+    "thesmstore": "The SM Store", "smstore": "The SM Store",
+    "puregold": "Puregold", "puregoldpricelub": "Puregold",
+    "robinsons": "Robinsons", "robinsonssupermarket": "Robinsons Supermarket",
+    "robinsonsdepartmentstore": "Robinsons Department Store",
+    "robinsonseasymart": "Robinsons Easymart",
+    "landers": "Landers", "landerssuperstore": "Landers",
+    "sr": "S&R", "srmembershipshopping": "S&R", "waltermart": "Waltermart",
+    "rustans": "Rustan's", "rustanssupermarket": "Rustan's Supermarket",
+    "shopwise": "Shopwise", "metro": "Metro", "metrosupermarket": "Metro",
+    "unimart": "Unimart", "citysupermarket": "City Supermarket",
+    "allday": "AllDay", "alldaysupermarket": "AllDay",
+    "merkado": "Merkado", "pricesmart": "PriceSmart",
+
+    # Convenience stores.
+    "7eleven": "7-Eleven", "seveneleven": "7-Eleven", "711": "7-Eleven",
+    "ministop": "Ministop", "alfamart": "Alfamart", "familymart": "FamilyMart",
+    "lawson": "Lawson", "unclejohn": "Uncle John's",
+    "unclejohns": "Uncle John's", "expressmart": "Expressmart",
+
+    # Fast food.
+    "jollibee": "Jollibee", "mcdonalds": "McDonald's", "mcdo": "McDonald's",
+    "kfc": "KFC", "chowking": "Chowking", "manginasal": "Mang Inasal",
+    "greenwich": "Greenwich", "redribbon": "Red Ribbon",
+    "goldilocks": "Goldilocks", "shakeys": "Shakey's", "maxs": "Max's",
+    "burgerking": "Burger King", "wendys": "Wendy's", "popeyes": "Popeyes",
+    "yellowcab": "Yellow Cab", "pizzahut": "Pizza Hut",
+    "dominospizza": "Domino's Pizza", "dominos": "Domino's Pizza",
+    "starbucks": "Starbucks", "dunkindonuts": "Dunkin'", "dunkin": "Dunkin'",
+    "boncheon": "Bonchon", "bonchon": "Bonchon", "arminos": "Armino's",
+    "tokyotokyo": "Tokyo Tokyo", "potatocorner": "Potato Corner",
+    "andoksm": "Andok's", "andoks": "Andok's", "bakedmac": "Baked Mac",
+
+    # Pharmacies.
+    "mercurydrug": "Mercury Drug", "watsons": "Watsons",
+    "southstardrug": "South Star Drug", "rosepharmacy": "Rose Pharmacy",
+    "generikadrugstore": "Generika", "generika": "Generika",
+    "themedicinecity": "The Medicine City",
 }
 
 # Words that appear alongside a brand and carry no identity of their own.

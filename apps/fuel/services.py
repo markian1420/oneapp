@@ -18,7 +18,9 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 
-from .models import DOEAdvisory, PriceObservation, PriceTier, Station
+from apps.places.models import Place
+
+from .models import DOEAdvisory, PriceObservation, PriceTier
 
 # Straight-line distance understates driving distance - roads bend, rivers need
 # bridges, and a station across a divided highway needs a U-turn. 1.35 is the
@@ -68,7 +70,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
-def quotes_for(stations, fuel_type: str) -> dict[int, Quote]:
+def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
     """Resolve a price for every station in one pass.
 
     Two queries regardless of how many stations are on screen. Doing this per
@@ -86,24 +88,24 @@ def quotes_for(stations, fuel_type: str) -> dict[int, Quote]:
     this week's number for the wrong brand - and both are labelled Estimated,
     so neither is being passed off as fact.
     """
-    stations = list(stations)
-    if not stations:
+    places = list(places)
+    if not places:
         return {}
 
-    ids = [s.pk for s in stations]
-    regions = {s.region for s in stations if s.region}
+    ids = [p.pk for p in places]
+    regions = {p.region for p in places if p.region}
 
     fresh_cutoff = timezone.now() - timedelta(days=settings.PRICE_FRESH_DAYS)
 
     latest_observation: dict[int, PriceObservation] = {}
     observations = (
-        PriceObservation.objects.filter(station_id__in=ids, fuel_type=fuel_type)
-        .order_by("station_id", "-observed_at")
-        .only("station_id", "price", "observed_at", "source")
+        PriceObservation.objects.filter(place_id__in=ids, fuel_type=fuel_type)
+        .order_by("place_id", "-observed_at")
+        .only("place_id", "price", "observed_at", "source")
     )
     for observation in observations:
         # Ordered newest-first within each station, so the first one wins.
-        latest_observation.setdefault(observation.station_id, observation)
+        latest_observation.setdefault(observation.place_id, observation)
 
     by_brand: dict[tuple[str, str], DOEAdvisory] = {}
     if regions:
@@ -116,11 +118,11 @@ def quotes_for(stations, fuel_type: str) -> dict[int, Quote]:
             by_brand.setdefault((advisory.region, advisory.brand), advisory)
 
     resolved: dict[int, Quote] = {}
-    for station in stations:
-        observation = latest_observation.get(station.pk)
+    for place in places:
+        observation = latest_observation.get(place.pk)
 
         if observation and observation.observed_at >= fresh_cutoff:
-            resolved[station.pk] = Quote(
+            resolved[place.pk] = Quote(
                 price=observation.price,
                 tier=PriceTier.LOGGED,
                 as_of=timezone.localtime(observation.observed_at).date(),
@@ -128,28 +130,28 @@ def quotes_for(stations, fuel_type: str) -> dict[int, Quote]:
             )
             continue
 
-        advisory = by_brand.get((station.region, station.brand))
+        advisory = by_brand.get((place.region, place.brand))
         if advisory:
-            resolved[station.pk] = Quote(
+            resolved[place.pk] = Quote(
                 price=advisory.price,
                 tier=PriceTier.ADVISORY,
                 as_of=advisory.week_of,
-                detail=f"{station.brand} in {station.region}",
+                detail=f"{place.brand} in {place.region}",
             )
             continue
 
-        prevailing = by_brand.get((station.region, ""))
+        prevailing = by_brand.get((place.region, ""))
         if prevailing:
-            resolved[station.pk] = Quote(
+            resolved[place.pk] = Quote(
                 price=prevailing.price,
                 tier=PriceTier.ESTIMATED,
                 as_of=prevailing.week_of,
-                detail=f"{station.region} prevailing price, any brand",
+                detail=f"{place.region} prevailing price, any brand",
             )
             continue
 
         if observation:
-            resolved[station.pk] = Quote(
+            resolved[place.pk] = Quote(
                 price=observation.price,
                 tier=PriceTier.ESTIMATED,
                 as_of=timezone.localtime(observation.observed_at).date(),
@@ -157,16 +159,16 @@ def quotes_for(stations, fuel_type: str) -> dict[int, Quote]:
             )
             continue
 
-        resolved[station.pk] = UNKNOWN_QUOTE
+        resolved[place.pk] = UNKNOWN_QUOTE
 
     return resolved
 
 
 @dataclass
 class Option:
-    """One station scored as a place to refuel."""
+    """One place scored as somewhere to refuel."""
 
-    station: Station
+    place: Place
     quote: Quote
     distance_km: Decimal | None
     fuel_cost: Decimal | None
@@ -184,7 +186,7 @@ def _round(value: Decimal, places: str = "0.01") -> Decimal:
 
 
 def score_options(
-    stations,
+    places,
     fuel_type: str,
     *,
     liters: Decimal,
@@ -199,17 +201,17 @@ def score_options(
     dearer one you pass anyway. Time and wear are not costed - they are real
     but not knowable from here, so the number stays one you can check.
     """
-    stations = list(stations)
-    quotes = quotes or quotes_for(stations, fuel_type)
+    places = list(places)
+    quotes = quotes or quotes_for(places, fuel_type)
 
     options: list[Option] = []
-    for station in stations:
-        quote = quotes.get(station.pk, UNKNOWN_QUOTE)
+    for place in places:
+        quote = quotes.get(place.pk, UNKNOWN_QUOTE)
 
         distance = None
         if origin is not None:
             straight = haversine_km(
-                origin[0], origin[1], float(station.latitude), float(station.longitude)
+                origin[0], origin[1], float(place.latitude), float(place.longitude)
             )
             distance = _round(Decimal(str(straight)) * ROAD_DISTANCE_FACTOR)
 
@@ -225,7 +227,7 @@ def score_options(
 
         options.append(
             Option(
-                station=station,
+                place=place,
                 quote=quote,
                 distance_km=distance,
                 fuel_cost=fuel_cost,

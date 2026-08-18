@@ -1,7 +1,7 @@
 """
-Overpass API client for pulling Philippine fuel stations out of OpenStreetMap.
+Overpass API client for pulling Philippine places out of OpenStreetMap.
 
-Stations are fetched one administrative area at a time rather than as one
+Places are fetched one administrative area at a time rather than as one
 national query. Two reasons: the public Overpass instances reject a
 country-wide query for anything but a bare count when they are busy, and asking
 for a known area means the province and DOE region come from the area we asked
@@ -180,26 +180,51 @@ class OverpassError(RuntimeError):
     pass
 
 
-def build_query(area: Area) -> str:
-    """Fuel stations in one area, as nodes and as building polygons.
+# Which OSM tags identify each kind of place. A kind can need more than one
+# selector: OSM separates a mall from a department store, but for deciding
+# where to shop that is a distinction without a difference.
+KIND_SELECTORS = {
+    "fuel": [('"amenity"="fuel"',)],
+    "market": [('"amenity"="marketplace"',)],
+    "supermarket": [('"shop"="supermarket"',)],
+    "convenience": [('"shop"="convenience"',)],
+    "fast_food": [('"amenity"="fast_food"',)],
+    "restaurant": [('"amenity"="restaurant"',)],
+    "mall": [('"shop"="mall"',), ('"shop"="department_store"',)],
+    "pharmacy": [('"amenity"="pharmacy"',)],
+}
+
+
+def build_query(area: Area, kind: str) -> str:
+    """Every place of one kind in one area, as nodes and as building polygons.
 
     'out center' collapses a polygon to a single point, which is what the map
-    needs - a forecourt outline is not more useful than a pin and costs far
-    more to ship to the browser.
+    needs - a forecourt or a mall footprint is not more useful than a pin and
+    costs far more to ship to the browser.
     """
+    selectors = KIND_SELECTORS.get(kind)
+    if not selectors:
+        raise ValueError(f"No OSM selector defined for kind {kind!r}")
+
     where = area.filter_clause
+    clauses = []
+    for selector in selectors:
+        tags = "".join(f"[{part}]" for part in selector)
+        clauses.append(f'  node{tags}{where};')
+        clauses.append(f'  way{tags}{where};')
+
+    body = "\n".join(clauses)
     return f"""
 [out:json][timeout:{settings.OVERPASS_TIMEOUT}];
 {area.selector}
 (
-  node["amenity"="fuel"]{where};
-  way["amenity"="fuel"]{where};
+{body}
 );
 out tags center;
 """.strip()
 
 
-def fetch_area(area: Area, *, max_attempts: int = 5) -> list[dict]:
+def fetch_area(area: Area, kind: str, *, max_attempts: int = 5) -> list[dict]:
     """Run one area query, moving down the endpoint list on failure.
 
     The public instances are shared and frequently loaded. They signal it three
@@ -221,7 +246,7 @@ def fetch_area(area: Area, *, max_attempts: int = 5) -> list[dict]:
         try:
             response = httpx.post(
                 endpoint,
-                data={"data": build_query(area)},
+                data={"data": build_query(area, kind)},
                 timeout=settings.OVERPASS_TIMEOUT + 30,
                 headers={"User-Agent": "OneApp/1.0 (personal fuel price tracker)"},
             )
@@ -245,7 +270,8 @@ def fetch_area(area: Area, *, max_attempts: int = 5) -> list[dict]:
         return payload.get("elements", [])
 
     raise OverpassError(
-        f"Overpass would not answer for {area.name} after {max_attempts} attempts. "
+        f"Overpass would not answer for {kind} in {area.name} after "
+        f"{max_attempts} attempts. "
         f"Last error: {last_error}"
     )
 
