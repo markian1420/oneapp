@@ -523,6 +523,59 @@ Every insight states how many observations it rests on, so a thin one reads as
 thin. When it has nothing to say it lists exactly what each missing insight
 needs, rather than showing an empty screen.
 
+## Keeping the data current
+
+**Nothing here is real time, and for most of it that is not a meaningful
+target.** Philippine pump prices move once a week, on a Tuesday. The DA
+publishes its commodity index once a weekday and often late — at 2pm the day's
+edition was still a 404. Banks add promos when they decide to. None of it ticks.
+
+What is achievable is that every number is as fresh as its source allows, and
+that the app says how old it is. One command refreshes everything:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py refresh_all
+```
+
+| Source | Publishes | Command |
+|---|---|---|
+| Fuel, per-brand averages | Daily | `import_metrofuel` |
+| Fuel, regional price band | Weekly | `import_gaswatch` |
+| Grocery commodity index | Weekdays | `import_da_prices` |
+| Card promos | Weekly | `import_bank_promos` |
+| Places on the map | Every few months | `import_places` |
+
+Places are **excluded from the routine refresh** — it is hundreds of Overpass
+queries against public instances that rate-limit hard, and shops get mapped over
+months. Ask for it with `--places`.
+
+Sources run **sequentially**, because SQLite takes one writer. **One failing does
+not stop the others**: the DOE has been down for this entire project, Overpass
+rate-limits, and the DA publishes late — a refresh that aborted on the first 404
+would almost never finish. Every attempt is recorded either way, so "the source
+is down" stays distinguishable from "nobody ran it".
+
+### Scheduling it
+
+Daily at 7am via Task Scheduler. Adjust the paths to match your checkout:
+
+```powershell
+$python = "C:\Users\gotosmcr\PycharmProjects\OneApp\.venv\Scripts\python.exe"
+$manage = "C:\Users\gotosmcr\PycharmProjects\OneApp\manage.py"
+schtasks /create /tn "OneApp refresh" /sc daily /st 07:00 `
+  /tr "$python $manage refresh_all --due-only"
+```
+
+`--due-only` skips anything already current, so a frequent timer costs nothing.
+
+### Seeing how stale things are
+
+**Today** carries a freshness table: every source, the cadence it genuinely
+publishes on, when it was last fetched, and whether it is Current, Due, Stale or
+Failed. Each source is judged on its own cadence — four days is behind for a
+daily feed and perfectly fine for a weekly one, so one global threshold would
+nag about the first and stay silent about the second.
+
 ## Travelling — what recalibrates and what does not
 
 The app was set up around Metro Manila, and **almost everything in it is
