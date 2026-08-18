@@ -1,0 +1,21 @@
+{% if messages %}
+  <div class="mb-5 space-y-2">
+    {% for message in messages %}
+      <div role="status"
+           class="flex items-start gap-3 rounded-[var(--radius-control)] border px-4 py-3 text-sm font-semibold
+                  {% if message.tags == 'success' %}border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-200
+                  {% elif message.tags == 'warning' %}border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200
+                  {% elif message.tags == 'error' %}border-red-300 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200
+                  {% else %}border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200{% endif %}">
+        <span class="mt-0.5 shrink-0">
+          {% if message.tags == "success" %}
+            {% include "partials/_icon.html" with name="check" class="h-4 w-4" %}
+          {% else %}
+            {% include "partials/_icon.html" with name="alert" class="h-4 w-4" %}
+          {% endif %}
+        </span>
+        <span>{{ message }}</span>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

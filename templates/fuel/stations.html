@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    Filtered, sorted and paged on the server &mdash; the browser only ever holds one page
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'fuel:map' %}" class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="map" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Map</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+{% comment %}
+  hx-get on the form swaps the results in place. It is progressive: without
+  JavaScript the same form is an ordinary GET to the same URL rendering the
+  same rows, because the view returns the partial only when htmx asks for it.
+{% endcomment %}
+{% comment %}
+  Triggers sit on the form, not on the individual inputs: htmx serialises the
+  element that fired, so a trigger on the search box alone would send the term
+  and silently drop the brand and region filters next to it.
+{% endcomment %}
+<form method="get" action="{% url 'fuel:stations' %}"
+      hx-get="{% url 'fuel:stations' %}"
+      hx-target="#station-results"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      hx-indicator="#filtering"
+      hx-trigger="submit, change, input changed delay:400ms from:input[name='q']"
+      class="panel panel-pad mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+
+  <label class="min-w-0 sm:col-span-2">
+    <span class="form-label">Search</span>
+    <input type="search" name="q" value="{{ q }}" class="form-control"
+           placeholder="Name, brand, city or street">
+  </label>
+
+  <label class="min-w-0">
+    <span class="form-label">Brand</span>
+    <select name="brand" class="form-control">
+      <option value="">All brands</option>
+      {% for name in brands %}
+        <option value="{{ name }}" {% if name == brand %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="min-w-0">
+    <span class="form-label">Region</span>
+    <select name="region" class="form-control">
+      <option value="">All regions</option>
+      {% for code, name in regions.items %}
+        <option value="{{ code }}" {% if code == region %}selected{% endif %}>{{ code }} &mdash; {{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="min-w-0">
+    <span class="form-label">Price for</span>
+    <select name="fuel" class="form-control">
+      {% for value, label in fuel_choices %}
+        <option value="{{ value }}" {% if value == fuel %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="flex cursor-pointer items-center gap-2 sm:col-span-2">
+    <input type="checkbox" name="favorites" value="1" {% if favorites_only %}checked{% endif %}
+           class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+    <span class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Only my pinned stations</span>
+  </label>
+
+  <div class="flex flex-wrap items-end justify-end gap-2 sm:col-span-2 lg:col-span-3">
+    <span id="filtering" class="htmx-indicator text-xs font-bold text-ink-muted dark:text-slate-400">
+      Filtering&hellip;
+    </span>
+    <button type="submit" class="btn-primary btn-sm">Search</button>
+    <a href="{% url 'fuel:stations' %}" class="btn-ghost btn-sm">Reset</a>
+  </div>
+</form>
+
+<div id="station-results">
+  {% include "fuel/_station_results.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/htmx/htmx.min.js' %}" defer></script>
+{% endblock %}

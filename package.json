@@ -1,0 +1,19 @@
+{
+  "name": "oneapp-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tailwind build for the OneApp budgeting console.",
+  "scripts": {
+    "vendor": "node scripts/copy-vendor.mjs",
+    "dev": "npm run vendor && tailwindcss -i ./assets/input.css -o ./static/dist/app.css --watch",
+    "build": "npm run vendor && tailwindcss -i ./assets/input.css -o ./static/dist/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "tailwindcss": "^4.1.11"
+  },
+  "dependencies": {
+    "htmx.org": "^2.0.4",
+    "leaflet": "^1.9.4"
+  }
+}

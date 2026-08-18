@@ -1,0 +1,11 @@
+# Core
+Django==6.0.7
+django-environ==0.14.0
+django-widget-tweaks==1.5.1
+whitenoise==6.12.0
+
+# Outbound HTTP: OpenStreetMap Overpass imports and DOE advisory fetches.
+httpx==0.28.1
+
+# Reading DOE weekly advisory workbooks.
+openpyxl==3.1.5

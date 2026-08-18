@@ -1,0 +1,42 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+*.log
+
+# Node / Tailwind
+node_modules/
+static/dist/
+static/vendor/
+
+# Agent + tooling artifacts (never belong in the repo)
+.claude/
+.playwright-cli/
+.codebase-memory/
+.securityscan/
+output/
+reports/
+tmp/
+scratch/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ table.total|intcomma }} logged · every one is a real price on the map
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'fuel:fillup_create' %}" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
+    Log a fill-up
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="metric metric-primary">
+    <p class="eyebrow">Total spent</p>
+    <p class="metric-value">&#8369;{{ totals.spend|default:0|floatformat:2|intcomma }}</p>
+  </div>
+  <div class="metric">
+    <p class="eyebrow">Litres bought</p>
+    <p class="metric-value">{{ totals.liters|default:0|floatformat:1|intcomma }}</p>
+  </div>
+  <div class="metric">
+    <p class="eyebrow">Average price</p>
+    <p class="metric-value">
+      {% if totals.average %}&#8369;{{ totals.average|floatformat:2 }}{% else %}&mdash;{% endif %}
+    </p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">per litre</p>
+  </div>
+  <div class="metric">
+    <p class="eyebrow">Fuel economy</p>
+    <p class="metric-value">{% if economy %}{{ economy }}{% else %}&mdash;{% endif %}</p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">
+      {% if economy %}km/L over recent full tanks{% else %}needs odometer on two full tanks{% endif %}
+    </p>
+  </div>
+</div>
+
+{% if vehicles|length > 1 %}
+  <form method="get" class="panel panel-pad mb-5 flex flex-wrap items-end gap-3">
+    <label class="min-w-0">
+      <span class="form-label">Vehicle</span>
+      <select name="vehicle" class="form-control" data-autosubmit>
+        <option value="">All vehicles</option>
+        {% for vehicle in vehicles %}
+          <option value="{{ vehicle.pk }}" {% if vehicle.pk|stringformat:"s" == vehicle_filter %}selected{% endif %}>
+            {{ vehicle.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+{% endif %}
+
+{% if fill_ups %}
+  <div class="table-wrap">
+    <table class="table min-w-[820px]">
+      <thead>{% include "partials/_table_head.html" %}</thead>
+      <tbody>
+        {% for fill_up in fill_ups %}
+          <tr>
+            <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y, H:i" }}</td>
+            <td>
+              <a href="{% url 'fuel:station_detail' fill_up.station.pk %}"
+                 class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                {{ fill_up.station.display_name }}
+              </a>
+              <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ fill_up.vehicle.name }}</span>
+            </td>
+            <td class="whitespace-nowrap">{{ fill_up.get_fuel_type_display }}</td>
+            <td class="text-right mono">{{ fill_up.liters|floatformat:2 }}</td>
+            <td class="text-right mono">{{ fill_up.price_per_liter|floatformat:2 }}</td>
+            <td class="text-right mono font-bold">&#8369;{{ fill_up.total_cost|floatformat:2|intcomma }}</td>
+            <td class="text-right mono">
+              {% if fill_up.odometer_km %}{{ fill_up.odometer_km|intcomma }}{% else %}&mdash;{% endif %}
+              {% if not fill_up.is_full_tank %}
+                <span class="ml-1 badge-muted">part</span>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap text-right">
+              <a href="{% url 'fuel:fillup_edit' fill_up.pk %}" class="btn-ghost btn-sm">Edit</a>
+              <form method="post" action="{% url 'fuel:fillup_delete' fill_up.pk %}" class="inline"
+                    data-confirm="Delete this fill-up? The price it recorded goes with it.">
+                {% csrf_token %}
+                <button type="submit" class="btn-ghost btn-sm text-red-600 dark:text-red-400">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_table_pager.html" %}
+{% else %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">Nothing logged yet.</p>
+    <p class="mx-auto mt-1 max-w-lg text-sm text-ink-muted dark:text-slate-400">
+      A fill-up takes about twenty seconds to record and does two jobs: it tracks the
+      spend, and it puts a price you actually paid onto the map. That is the only
+      per-station price data anyone has in the Philippines.
+    </p>
+    <a href="{% url 'fuel:fillup_create' %}" class="btn-primary btn-sm mt-4">Log the first one</a>
+  </div>
+{% endif %}
+{% endblock %}

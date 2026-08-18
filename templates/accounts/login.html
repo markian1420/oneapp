@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Sign in · OneApp{% endblock %}
+
+{% block auth_content %}
+<div class="grid min-h-full place-items-center px-4 py-10">
+  <div class="panel w-full max-w-md">
+    <div class="panel-pad">
+      <div class="mb-6 flex items-center gap-3">
+        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-[12px]
+                     bg-gradient-to-br from-brand-700 to-brand-400 text-white">
+          {% include "partials/_icon.html" with name="wallet" class="h-5 w-5" %}
+        </span>
+        <div class="min-w-0">
+          <p class="text-lg font-black tracking-tight text-ink dark:text-white">OneApp</p>
+          <p class="eyebrow">Spend &amp; savings</p>
+        </div>
+      </div>
+
+      {% include "partials/_messages.html" %}
+
+      {% if form.non_field_errors %}
+        <div class="mb-4 rounded-[var(--radius-control)] border border-red-300 bg-red-50 px-4 py-3
+                    text-sm font-semibold text-red-800
+                    dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+          {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% include "partials/_field.html" with field=form.username %}
+        {% include "partials/_field.html" with field=form.password %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="btn-primary w-full">Sign in</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

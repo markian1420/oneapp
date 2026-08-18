@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    Any two of litres, price and total &mdash; the third is worked out
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+
+  <form method="post" class="panel min-w-0">
+    {% csrf_token %}
+    <div class="panel-header">
+      <div class="min-w-0">
+        <p class="eyebrow">{% if creating %}New{% else %}Editing{% endif %}</p>
+        <p class="text-sm font-bold text-ink dark:text-white">Fill-up details</p>
+      </div>
+    </div>
+
+    <div class="panel-pad space-y-5">
+      {% if form.non_field_errors %}
+        <div class="rounded-[var(--radius-control)] border border-red-300 bg-red-50 px-4 py-3
+                    text-sm font-semibold text-red-800
+                    dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+          {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=form.vehicle %}
+        {% include "partials/_field.html" with field=form.fuel_type %}
+        {% include "partials/_field.html" with field=form.station wrapper_class="sm:col-span-2" %}
+        {% include "partials/_field.html" with field=form.filled_at %}
+        {% include "partials/_field.html" with field=form.odometer_km %}
+      </div>
+
+      <div class="rounded-[var(--radius-control)] border border-slate-200 p-4 dark:border-night-line">
+        <p class="eyebrow">What it cost</p>
+        <div class="mt-3 grid gap-4 sm:grid-cols-3">
+          {% include "partials/_field.html" with field=form.liters %}
+          {% include "partials/_field.html" with field=form.price_per_liter %}
+          {% include "partials/_field.html" with field=form.total_cost %}
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include "partials/_field.html" with field=form.is_full_tank %}
+        {% include "partials/_field.html" with field=form.notes %}
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" class="btn-primary">
+          {% if creating %}Save fill-up{% else %}Save changes{% endif %}
+        </button>
+        <a href="{% url 'fuel:fillups' %}" class="btn-ghost">Cancel</a>
+      </div>
+    </div>
+  </form>
+
+  <aside class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <p class="eyebrow">Why this matters</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Saving this writes a price against that station, dated now. It outranks the
+        DOE regional advisory for the next {{ fresh_days }} days, so the map starts
+        telling you the truth about the places you actually go.
+      </p>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">Odometer</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Optional, but two consecutive full tanks with readings give real km/L &mdash;
+        which is what turns a price gap into pesos when the app compares stations.
+        Untick <em>Filled to full</em> for a partial fill so it is left out of that sum.
+      </p>
+    </div>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    The regional baseline for every station you have not visited
+  </p>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+
+  <section class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <div class="flex flex-wrap items-center gap-3">
+        {% if current_week_rows %}
+          <span class="badge-success">Current</span>
+          <p class="text-sm font-bold text-ink dark:text-white">
+            {{ current_week_rows }} price{{ current_week_rows|pluralize }} across
+            {{ covered_regions }} region{{ covered_regions|pluralize }} for the week of
+            {{ current_week|date:"d M Y" }}
+          </p>
+        {% else %}
+          <span class="badge-warning">Nothing this week</span>
+          <p class="text-sm font-bold text-ink dark:text-white">
+            No advisory entered for the week of {{ current_week|date:"d M Y" }}
+          </p>
+        {% endif %}
+      </div>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        The DOE publishes a weekly retail price advisory, by brand and region, taking
+        effect on Tuesday. It is a bulletin rather than an API, so it is entered here.
+        A file can be loaded instead with
+        <code class="kbd">python manage.py import_doe_advisory --file prices.csv</code>.
+      </p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Recorded</p>
+          <p class="text-sm font-bold text-ink dark:text-white">Advisory history</p>
+        </div>
+        <form method="get">
+          <select name="region" class="form-control min-h-[34px] w-auto py-1 text-xs" data-autosubmit>
+            <option value="">All regions</option>
+            {% for code, name in regions.items %}
+              <option value="{{ code }}" {% if code == region %}selected{% endif %}>{{ code }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+
+      {% if rows %}
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table">
+            <thead>{% include "partials/_table_head.html" %}</thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td class="whitespace-nowrap">{{ row.week_of|date:"d M Y" }}</td>
+                  <td class="whitespace-nowrap font-bold text-ink dark:text-slate-200">{{ row.region }}</td>
+                  <td>{% if row.brand %}{{ row.brand }}{% else %}<span class="badge-muted">Prevailing</span>{% endif %}</td>
+                  <td class="whitespace-nowrap">{{ row.get_fuel_type_display }}</td>
+                  <td class="text-right mono font-bold">&#8369;{{ row.price|floatformat:2 }}</td>
+                  <td class="text-ink-muted dark:text-slate-400">
+                    {% if row.source_url %}
+                      <a href="{{ row.source_url }}" target="_blank" rel="noopener"
+                         class="break-words underline hover:text-brand-700">{{ row.source_note|default:"Source" }}</a>
+                    {% else %}{{ row.source_note|default:"&mdash;" }}{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "partials/_table_pager.html" %}
+      {% else %}
+        <div class="panel-pad">
+          <p class="text-sm text-ink-muted dark:text-slate-400">
+            Nothing recorded yet. Until there is, stations you have never filled up at
+            show no price at all &mdash; which is the honest answer, but not a useful one.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="min-w-0">
+    <form method="post" class="panel min-w-0">
+      {% csrf_token %}
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Enter</p>
+          <p class="text-sm font-bold text-ink dark:text-white">This week&rsquo;s prices</p>
+        </div>
+      </div>
+
+      <div class="panel-pad space-y-4">
+        {% if form.non_field_errors %}
+          <div class="rounded-[var(--radius-control)] border border-red-300 bg-red-50 px-4 py-3
+                      text-sm font-semibold text-red-800
+                      dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include "partials/_field.html" with field=form.week_of %}
+          {% include "partials/_field.html" with field=form.region %}
+        </div>
+        {% include "partials/_field.html" with field=form.brand %}
+
+        <div class="rounded-[var(--radius-control)] border border-slate-200 p-4 dark:border-night-line">
+          <p class="eyebrow">Price per litre</p>
+          <p class="form-help mt-1">Fill in the grades the advisory lists; leave the rest blank.</p>
+          <div class="mt-3 space-y-3">
+            {% for field in form.price_fields %}
+              {% include "partials/_field.html" with field=field %}
+            {% endfor %}
+          </div>
+        </div>
+
+        {% include "partials/_field.html" with field=form.source_url %}
+
+        <button type="submit" class="btn-primary w-full">Save advisory</button>
+      </div>
+    </form>
+  </aside>
+</div>
+{% endblock %}

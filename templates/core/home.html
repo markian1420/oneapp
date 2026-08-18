@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    Where the money goes, and where it does not have to
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'fuel:map' %}" class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="map" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Station map</span>
+  </a>
+  <a href="{% url 'fuel:fillup_create' %}" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
+    Log a fill-up
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="metric metric-primary">
+    <p class="eyebrow">Fuel this month</p>
+    <p class="metric-value">&#8369;{{ month_spend|floatformat:2|intcomma }}</p>
+    <p class="text-[12px] font-bold text-white/85">
+      {% if spend_change is not None %}
+        {% if spend_change > 0 %}&#9650; &#8369;{{ spend_change|floatformat:2|intcomma }} vs last month
+        {% else %}&#9660; &#8369;{{ spend_change|floatformat:2|intcomma|cut:"-" }} vs last month{% endif %}
+      {% else %}
+        {{ month_liters|floatformat:1 }} L bought
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="metric">
+    <p class="eyebrow">Average paid</p>
+    <p class="metric-value">
+      {% if month_avg_price %}&#8369;{{ month_avg_price|floatformat:2 }}{% else %}&mdash;{% endif %}
+    </p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">per litre, this month</p>
+  </div>
+
+  <div class="metric">
+    <p class="eyebrow">Fuel economy</p>
+    <p class="metric-value">{% if economy %}{{ economy }}{% else %}&mdash;{% endif %}</p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">
+      {% if economy %}km per litre, measured{% else %}log odometer on two full tanks{% endif %}
+    </p>
+  </div>
+
+  <div class="metric">
+    <p class="eyebrow">Spent this year</p>
+    <p class="metric-value">&#8369;{{ year_spend|floatformat:0|intcomma }}</p>
+    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">fuel only, so far</p>
+  </div>
+</div>
+
+<div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+
+  <section class="min-w-0 space-y-5">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Recent</p>
+          <p class="text-sm font-bold text-ink dark:text-white">Latest fill-ups</p>
+        </div>
+        <a href="{% url 'fuel:fillups' %}" class="btn-ghost btn-sm">See all</a>
+      </div>
+
+      {% if recent_fill_ups %}
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>When</th><th>Station</th><th>Grade</th>
+                <th class="text-right">Litres</th>
+                <th class="text-right">Per litre</th>
+                <th class="text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fill_up in recent_fill_ups %}
+                <tr>
+                  <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y" }}</td>
+                  <td>
+                    <a href="{% url 'fuel:station_detail' fill_up.station.pk %}"
+                       class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                      {{ fill_up.station.display_name }}
+                    </a>
+                  </td>
+                  <td class="whitespace-nowrap">{{ fill_up.get_fuel_type_display }}</td>
+                  <td class="text-right mono">{{ fill_up.liters|floatformat:2 }}</td>
+                  <td class="text-right mono">{{ fill_up.price_per_liter|floatformat:2 }}</td>
+                  <td class="text-right mono font-bold">&#8369;{{ fill_up.total_cost|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="panel-pad">
+          <p class="text-sm text-ink-muted dark:text-slate-400">
+            Nothing logged yet. Every fill-up you record becomes a real price on the map,
+            which is the only per-station price data that exists for the Philippines.
+          </p>
+          <a href="{% url 'fuel:fillup_create' %}" class="btn-primary btn-sm mt-3">Log the first one</a>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if by_brand %}
+      <div class="panel">
+        <div class="panel-header">
+          <div class="min-w-0">
+            <p class="eyebrow">This year</p>
+            <p class="text-sm font-bold text-ink dark:text-white">Where you buy fuel</p>
+          </div>
+        </div>
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th class="text-right">Visits</th>
+                <th class="text-right">Average &#8369;/L</th>
+                <th class="text-right">Spent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in by_brand %}
+                <tr>
+                  <td class="font-bold text-ink dark:text-slate-200">{{ row.station__brand|default:"Unbranded" }}</td>
+                  <td class="text-right mono">{{ row.visits }}</td>
+                  <td class="text-right mono">{{ row.avg_price|floatformat:2 }}</td>
+                  <td class="text-right mono font-bold">&#8369;{{ row.spend|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="min-w-0 space-y-5">
+    <div class="panel panel-pad">
+      <p class="eyebrow">Price coverage</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        There is no live per-station price feed in the Philippines, so the map is only
+        as good as what has been gathered. This is where that stands.
+      </p>
+
+      <dl class="mt-4 space-y-3">
+        <div class="flex items-baseline justify-between gap-3">
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Stations on the map</dt>
+          <dd class="mono font-black text-ink dark:text-white">{{ station_count|intcomma }}</dd>
+        </div>
+        <div class="flex items-baseline justify-between gap-3">
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">With a price you logged</dt>
+          <dd class="mono font-black text-ink dark:text-white">{{ priced_stations|intcomma }}</dd>
+        </div>
+        <div>
+          <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+            <div class="h-full rounded-full bg-gradient-to-r from-brand-700 to-brand-400"
+                 style="width: {{ price_coverage }}%"></div>
+          </div>
+          <p class="mt-1.5 text-[11px] font-bold text-ink-muted dark:text-slate-400">
+            {{ price_coverage }}% first-hand · the rest falls back to the DOE advisory
+          </p>
+        </div>
+      </dl>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">DOE weekly advisory</p>
+      {% if advisory_rows %}
+        <p class="mt-2 flex items-center gap-2">
+          <span class="badge-success">Current</span>
+          <span class="text-[13px] font-bold text-ink-soft dark:text-slate-300">
+            {{ advisory_rows }} price{{ advisory_rows|pluralize }} for week of {{ advisory_week|date:"d M Y" }}
+          </span>
+        </p>
+      {% else %}
+        <p class="mt-2 flex flex-wrap items-center gap-2">
+          <span class="badge-warning">Stale</span>
+          <span class="text-[13px] font-bold text-ink-soft dark:text-slate-300">
+            Nothing for the week of {{ advisory_week|date:"d M Y" }}
+          </span>
+        </p>
+        <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+          The DOE publishes on Tuesdays. Until this week is entered, unvisited stations
+          are priced from
+          {% if advisory_latest %}the week of {{ advisory_latest.week_of|date:"d M Y" }}{% else %}nothing at all{% endif %}.
+        </p>
+      {% endif %}
+      <a href="{% url 'fuel:advisory' %}" class="btn-ghost btn-sm mt-3">Update the advisory</a>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">Next modules</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Groceries and utilities plug into the same shell: log what you paid, compare
+        where you paid it, and let the history do the arguing.
+      </p>
+    </div>
+  </aside>
+</div>
+{% endblock %}

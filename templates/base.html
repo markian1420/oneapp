@@ -1,0 +1,162 @@
+{% load static %}<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="same-origin">
+  <meta name="theme-color" content="#15803d">
+  <title>{% block title %}{{ page_title|default:"OneApp" }} · OneApp{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'dist/app.css' %}">
+  <link rel="icon" href="{% static 'img/icon.svg' %}" type="image/svg+xml">
+  <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+  {% block head %}{% endblock %}
+  <script>
+    // Applied before first paint so a dark-mode user never sees a light flash.
+    (function () {
+      var stored = localStorage.getItem('theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark' || (!stored && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+</head>
+<body class="h-full">
+{% if user.is_authenticated %}
+<div class="min-h-full lg:flex">
+
+  {% include "partials/_sidebar.html" %}
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    {% comment %}
+      The topbar is inlined rather than {% include %}d on purpose: {% block %}
+      only participates in {% extends %} inheritance, so an included partial
+      would silently swallow every child template's topbar_actions/subtitle
+      override and render the bar with no buttons.
+    {% endcomment %}
+    <header class="sticky top-0 z-20 border-b border-slate-200/70 bg-canvas/85 backdrop-blur-lg
+                   dark:border-night-line dark:bg-night/85">
+      <div class="mx-auto flex w-full max-w-[1620px] flex-wrap items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+
+        <button type="button" data-nav-toggle
+                class="rounded-[var(--radius-control)] border border-slate-200 bg-white p-2 text-ink-soft
+                       dark:border-night-line dark:bg-night-alt dark:text-slate-300 lg:hidden"
+                aria-label="Open navigation">
+          {% include "partials/_icon.html" with name="menu" class="h-5 w-5" %}
+        </button>
+
+        <div class="min-w-0 flex-1">
+          <h1 class="truncate text-lg font-black tracking-tight text-ink dark:text-white sm:text-xl">
+            {{ page_title|default:"Overview" }}
+          </h1>
+          {% block subtitle %}{% endblock %}
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          {% block topbar_actions %}{% endblock %}
+
+          <button type="button" data-theme-toggle
+                  class="rounded-[var(--radius-control)] border border-slate-200 bg-white p-2 text-ink-soft
+                         transition hover:border-brand-300 hover:text-brand-700
+                         dark:border-night-line dark:bg-night-alt dark:text-slate-300"
+                  aria-label="Toggle dark mode">
+            {% include "partials/_icon.html" with name="sun" class="h-4 w-4" %}
+          </button>
+
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-ghost btn-sm">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-[1620px] flex-1 px-4 pb-8 pt-5 sm:px-6 lg:px-8">
+      {% include "partials/_messages.html" %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-slate-200/70 bg-canvas/85 px-4 py-3 text-[13px]
+                   dark:border-night-line dark:bg-night/85 sm:px-6 lg:px-8">
+      <div class="mx-auto flex w-full max-w-[1620px] flex-wrap items-center gap-x-2 gap-y-1">
+        <span class="font-semibold text-slate-500 dark:text-slate-400">&copy; {% now "Y" %} OneApp</span>
+        <span class="text-slate-400 dark:text-slate-500">·</span>
+        <span class="text-slate-500 dark:text-slate-400">
+          Station data
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener"
+             class="font-semibold text-slate-700 underline-offset-2 hover:text-brand-700 hover:underline dark:text-slate-300 dark:hover:text-brand-400">&copy; OpenStreetMap contributors</a>,
+          ODbL
+        </span>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Off-canvas backdrop for the mobile sidebar. -->
+<div id="nav-backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 backdrop-blur-sm lg:hidden"></div>
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<script>
+  (function () {
+    var root = document.documentElement;
+
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var isDark = root.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      });
+    });
+
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('nav-backdrop');
+
+    function closeNav() {
+      if (!sidebar) return;
+      sidebar.classList.add('-translate-x-full');
+      if (backdrop) backdrop.classList.add('hidden');
+    }
+
+    document.querySelectorAll('[data-nav-toggle]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (!sidebar) return;
+        var opening = sidebar.classList.contains('-translate-x-full');
+        sidebar.classList.toggle('-translate-x-full');
+        if (backdrop) backdrop.classList.toggle('hidden', !opening);
+      });
+    });
+
+    if (backdrop) backdrop.addEventListener('click', closeNav);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeNav();
+    });
+
+    // Confirmation for anything destructive.
+    document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+      });
+    });
+
+    // Rows-per-page dropdown: each option's value is the full URL for that
+    // size, so navigation is a plain page load and the server still decides
+    // what rows exist.
+    document.querySelectorAll('[data-page-size-select]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        if (select.value) window.location.href = select.value;
+      });
+    });
+
+    // Filter bars submit on change: one control, one round trip, no Apply
+    // button to forget.
+    document.querySelectorAll('[data-autosubmit]').forEach(function (control) {
+      control.addEventListener('change', function () {
+        control.form.submit();
+      });
+    });
+  })();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

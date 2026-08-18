@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OneApp">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#166534"/>
+      <stop offset="1" stop-color="#20a95a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 372V180a34 34 0 0 1 34-34h96a34 34 0 0 1 34 34v192"/>
+    <path d="M130 372h224"/>
+    <path d="M176 226h112"/>
+    <path d="M314 268h34a30 30 0 0 1 30 30v28a28 28 0 0 0 56 0V214l-48-46"/>
+  </g>
+</svg>

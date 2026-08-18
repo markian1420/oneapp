@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+{% endblock %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ station_count }} station{{ station_count|pluralize }} imported · prices are labelled by where they came from
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" id="locate" class="btn-ghost btn-sm">
+    {% include "partials/_icon.html" with name="locate" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Use my location</span>
+  </button>
+{% endblock %}
+
+{% block content %}
+{% if not station_count %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">No stations imported yet.</p>
+    <p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
+      Pull them from OpenStreetMap with
+      <code class="kbd">python manage.py import_stations --area NCR</code>
+      (or <code class="kbd">--area all</code> for the whole country).
+    </p>
+  </div>
+{% endif %}
+
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+
+  <section class="min-w-0 space-y-4">
+    <form method="get" class="panel panel-pad grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="min-w-0">
+        <span class="form-label">Grade</span>
+        <select name="fuel" id="fuel" class="form-control">
+          {% for value, label in fuel_choices %}
+            <option value="{{ value }}" {% if value == fuel %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="min-w-0">
+        <span class="form-label">Brand</span>
+        <select name="brand" id="brand" class="form-control">
+          <option value="">All brands</option>
+          {% for name in brands %}
+            <option value="{{ name }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="min-w-0">
+        <span class="form-label">Litres to buy</span>
+        <input type="number" id="liters" min="1" max="200" step="0.5"
+               value="{{ default_liters|floatformat:'-1' }}" class="form-control">
+      </label>
+
+      <label class="min-w-0">
+        <span class="form-label">Show</span>
+        <select id="favorites" class="form-control">
+          <option value="">Every station</option>
+          <option value="1">Only my pinned stations</option>
+        </select>
+      </label>
+    </form>
+
+    <div id="map" class="map-shell"></div>
+
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-bold">
+      <span class="eyebrow">Price source</span>
+      <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-brand-600"></span>You paid this</span>
+      <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-sky-600"></span>DOE advisory</span>
+      <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-amber-500"></span>Estimated</span>
+      <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full border border-slate-400 bg-white"></span>No price</span>
+    </div>
+  </section>
+
+  <aside class="min-w-0 space-y-4">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Best value in view</p>
+          <p class="truncate text-sm font-bold text-ink dark:text-white" id="scope-note">Pan the map to compare</p>
+        </div>
+      </div>
+      <div class="panel-pad space-y-2 max-h-[52vh] overflow-y-auto scroll-slim" id="options">
+        <p class="text-sm text-ink-muted dark:text-slate-400">Loading stations…</p>
+      </div>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">How the ranking works</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Cost of the litres you asked for, plus the fuel burned driving there and back
+        {% if vehicle %}at {{ vehicle.km_per_liter }} km/L{% endif %}.
+        Distance is straight-line with a 1.35&times; road allowance, so a cheap station
+        far away loses to a fair one you pass anyway.
+      </p>
+      {% if not vehicle %}
+        <a href="{% url 'fuel:vehicle_create' %}" class="btn-ghost btn-sm mt-3">Add a vehicle to enable this</a>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+<script>
+(function () {
+  var MAX = {{ max_stations }};
+  var map = L.map('map', { zoomControl: true })
+             .setView([{{ center_lat }}, {{ center_lng }}], {{ zoom }});
+
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  var layer = L.layerGroup().addTo(map);
+  var optionsEl = document.getElementById('options');
+  var scopeEl = document.getElementById('scope-note');
+  var origin = null;         // Where "distance" is measured from.
+  var originMarker = null;
+  var pending = null;        // In-flight request, so a fast pan cancels the old one.
+  var debounce = null;
+
+  var peso = new Intl.NumberFormat('en-PH', {
+    style: 'currency', currency: 'PHP', maximumFractionDigits: 2
+  });
+
+  function tierClass(tier) {
+    return {
+      logged: 'pin-logged', advisory: 'pin-advisory',
+      estimated: 'pin-estimated', unknown: 'pin-unknown'
+    }[tier] || 'pin-unknown';
+  }
+
+  function badgeClass(tier) {
+    return {
+      logged: 'badge-success', advisory: 'badge-info',
+      estimated: 'badge-warning', unknown: 'badge-muted'
+    }[tier] || 'badge-muted';
+  }
+
+  function escapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : value;
+    return div.innerHTML;
+  }
+
+  function markerFor(station) {
+    var label = station.price ? Number(station.price).toFixed(2) : '—';
+    var classes = 'pin ' + tierClass(station.tier) + (station.favorite ? ' pin-favorite' : '');
+    var icon = L.divIcon({
+      className: '',
+      html: '<span class="' + classes + '">' + label + '</span>',
+      iconSize: [46, 20],
+      iconAnchor: [23, 10]
+    });
+
+    return L.marker([station.lat, station.lng], { icon: icon, title: station.name })
+      .bindPopup(
+        '<p class="font-bold text-ink dark:text-white">' + escapeHtml(station.name) + '</p>' +
+        '<p class="text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(station.city || '') + '</p>' +
+        '<p class="mt-2 text-base font-black text-ink dark:text-white">' +
+          (station.price ? peso.format(station.price) + '<span class="text-xs font-bold text-ink-muted">/L</span>' : 'No price on record') +
+        '</p>' +
+        '<p class="mt-1"><span class="' + badgeClass(station.tier) + '">' + escapeHtml(station.tier_label) + '</span></p>' +
+        (station.detail ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(station.detail) + '</p>' : '') +
+        (station.distance_km ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">about ' + station.distance_km + ' km away</p>' : '') +
+        '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + station.url + '">Open station</a></p>'
+      );
+  }
+
+  function optionRow(station, index) {
+    var best = index === 0 && station.effective_cost;
+    var row = document.createElement('a');
+    row.href = station.url;
+    row.className = 'option-row' + (best ? ' option-best' : '');
+    row.innerHTML =
+      '<span class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-black text-slate-600 dark:bg-white/10 dark:text-slate-300">' + (index + 1) + '</span>' +
+      '<span class="min-w-0 flex-1">' +
+        '<span class="block truncate text-[13px] font-bold text-ink dark:text-white">' + escapeHtml(station.name) + '</span>' +
+        '<span class="block truncate text-[11px] text-ink-muted dark:text-slate-400">' +
+          escapeHtml(station.city || '') +
+          (station.distance_km ? ' · ' + station.distance_km + ' km' : '') +
+        '</span>' +
+        '<span class="mt-1 inline-flex items-center gap-1.5">' +
+          '<span class="' + badgeClass(station.tier) + '">' + escapeHtml(station.tier_label) + '</span>' +
+        '</span>' +
+      '</span>' +
+      '<span class="shrink-0 text-right">' +
+        '<span class="block text-sm font-black text-ink dark:text-white">' +
+          (station.price ? peso.format(station.price) : '—') +
+        '</span>' +
+        (station.effective_cost
+          ? '<span class="block text-[11px] font-bold text-ink-muted dark:text-slate-400">' + peso.format(station.effective_cost) + ' all in</span>'
+          : '') +
+        (station.saving && Number(station.saving) > 0
+          ? '<span class="block text-[11px] font-extrabold text-brand-700 dark:text-brand-400">saves ' + peso.format(station.saving) + '</span>'
+          : '') +
+      '</span>';
+    return row;
+  }
+
+  function render(data) {
+    layer.clearLayers();
+    optionsEl.innerHTML = '';
+
+    if (!data.stations.length) {
+      optionsEl.innerHTML = '<p class="text-sm text-ink-muted dark:text-slate-400">No stations in view. Zoom out or pan.</p>';
+      scopeEl.textContent = 'Nothing in view';
+      return;
+    }
+
+    data.stations.forEach(function (station, index) {
+      layer.addLayer(markerFor(station));
+      // The list is the ranking, so it stays short enough to read.
+      if (index < 25) optionsEl.appendChild(optionRow(station, index));
+    });
+
+    scopeEl.textContent = data.truncated
+      ? 'Showing ' + data.shown + ' of ' + data.total + ' here — zoom in for the rest'
+      : data.shown + ' station' + (data.shown === 1 ? '' : 's') + ' in view';
+
+    if (!origin) {
+      var note = document.createElement('p');
+      note.className = 'pt-1 text-[11px] text-ink-muted dark:text-slate-400';
+      note.textContent = 'Ranked by price only. Use my location to include the drive.';
+      optionsEl.appendChild(note);
+    }
+  }
+
+  function load() {
+    var bounds = map.getBounds();
+    var params = new URLSearchParams({
+      south: bounds.getSouth(), west: bounds.getWest(),
+      north: bounds.getNorth(), east: bounds.getEast(),
+      fuel: document.getElementById('fuel').value,
+      brand: document.getElementById('brand').value,
+      favorites: document.getElementById('favorites').value,
+      liters: document.getElementById('liters').value || ''
+    });
+
+    // Without a real location, rank from the middle of what you are looking
+    // at - it is the honest reading of "near here" when nothing better exists.
+    var reference = origin || map.getCenter();
+    params.set('lat', reference.lat !== undefined ? reference.lat : reference[0]);
+    params.set('lng', reference.lng !== undefined ? reference.lng : reference[1]);
+
+    if (pending) pending.abort();
+    pending = new AbortController();
+
+    fetch('{% url "fuel:stations_json" %}?' + params.toString(), {
+      signal: pending.signal,
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(render)
+      .catch(function (error) {
+        if (error.name === 'AbortError') return;
+        optionsEl.innerHTML =
+          '<p class="text-sm font-semibold text-red-600 dark:text-red-400">Could not load stations. Check the connection and pan to retry.</p>';
+      });
+  }
+
+  function scheduleLoad() {
+    window.clearTimeout(debounce);
+    debounce = window.setTimeout(load, 250);
+  }
+
+  map.on('moveend', scheduleLoad);
+  ['fuel', 'brand', 'liters', 'favorites'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', scheduleLoad);
+  });
+
+  document.getElementById('locate').addEventListener('click', function () {
+    if (!navigator.geolocation) {
+      window.alert('This browser will not share a location.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(function (position) {
+      origin = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (originMarker) map.removeLayer(originMarker);
+      originMarker = L.circleMarker([origin.lat, origin.lng], {
+        radius: 8, color: '#15803d', fillColor: '#20a95a', fillOpacity: 0.9, weight: 3
+      }).addTo(map).bindPopup('You are here');
+      map.setView([origin.lat, origin.lng], 14);
+    }, function () {
+      window.alert('Could not get a location. Distances will be measured from the map centre.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  // Leaflet measures the container on creation; inside a grid that settles a
+  // frame later, so without this the map paints into a stale size.
+  window.setTimeout(function () { map.invalidateSize(); load(); }, 60);
+})();
+</script>
+{% endblock %}

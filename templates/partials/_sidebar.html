@@ -1,0 +1,68 @@
+{% comment %}
+  The sidebar follows the theme: a light green-tinted surface in light mode,
+  the deep navy in dark mode. The active nav row keeps its green gradient in
+  both, since it reads well against either background.
+{% endcomment %}
+<aside id="sidebar"
+       class="fixed inset-y-0 left-0 z-40 flex w-[280px] -translate-x-full flex-col
+              border-r border-slate-200/80 bg-canvas-alt text-ink
+              transition-transform duration-200
+              dark:border-night-line dark:bg-night dark:text-slate-300
+              lg:sticky lg:top-0 lg:h-screen lg:translate-x-0">
+
+  <div class="flex items-center gap-3 border-b border-slate-200/80 px-5 py-5 dark:border-white/10">
+    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-[12px]
+                 bg-gradient-to-br from-brand-700 to-brand-400 text-white">
+      {% include "partials/_icon.html" with name="wallet" class="h-5 w-5" %}
+    </span>
+    <div class="min-w-0">
+      <p class="truncate text-sm font-black tracking-tight text-ink dark:text-white">OneApp</p>
+      <p class="truncate text-[11px] font-bold uppercase tracking-[.08em] text-ink-muted dark:text-slate-400">Spend &amp; savings</p>
+    </div>
+    <button type="button" data-nav-toggle
+            class="ml-auto rounded-lg p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink
+                   dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white lg:hidden"
+            aria-label="Close navigation">
+      {% include "partials/_icon.html" with name="x" class="h-5 w-5" %}
+    </button>
+  </div>
+
+  <div class="px-4 pt-4">
+    <a href="{% url 'fuel:fillup_create' %}" class="btn-primary w-full">
+      {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
+      Log a fill-up
+    </a>
+  </div>
+
+  <nav class="scroll-slim flex-1 overflow-y-auto px-4 py-4">
+    {% for group in nav_groups %}
+      <div class="space-y-1 {% if not forloop.first %}mt-5{% endif %}">
+        {% if group.name %}
+          <p class="eyebrow px-3 pb-1">{{ group.name }}</p>
+        {% endif %}
+        {% for module in group.modules %}
+          <a href="{% url module.url_name %}"
+             class="{% if module.code == current_module %}nav-link-active{% else %}nav-link{% endif %}"
+             {% if module.code == current_module %}aria-current="page"{% endif %}>
+            <span class="nav-icon">
+              {% include "partials/_icon.html" with name=module.icon class="h-4 w-4" %}
+            </span>
+            <span class="truncate">{{ module.name }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </nav>
+
+  <div class="border-t border-slate-200/80 p-4 dark:border-white/10">
+    <div class="flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2.5">
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-600 to-brand-400 text-xs font-black text-white">
+        {{ user.get_username|slice:":2"|upper }}
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-sm font-bold text-ink dark:text-white">{{ user.get_full_name|default:user.get_username }}</span>
+        <span class="block truncate text-[11px] text-ink-muted dark:text-slate-400">Signed in</span>
+      </span>
+    </div>
+  </div>
+</aside>

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}{{ station.display_name }} · OneApp{% endblock %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ station.locality|default:"Location not recorded" }}{% if station.region %} · {{ station.region }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="{% url 'fuel:station_favorite' station.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" class="btn-ghost btn-sm">
+      {% include "partials/_icon.html" with name="star" class="h-4 w-4" %}
+      <span class="hidden sm:inline">{% if station.is_favorite %}Unpin{% else %}Pin{% endif %}</span>
+    </button>
+  </form>
+  <a href="{% url 'fuel:fillup_create' %}?station={{ station.pk }}" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
+    Log a fill-up
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+
+  <section class="min-w-0 space-y-5">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Current prices</p>
+          <p class="text-sm font-bold text-ink dark:text-white">{{ station.display_name }}</p>
+        </div>
+        {% if station.is_favorite %}<span class="badge-success">Pinned</span>{% endif %}
+      </div>
+
+      <div class="panel-pad grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {% for grade in grades %}
+          <div class="rounded-[var(--radius-control)] border border-slate-200 p-3 dark:border-night-line">
+            <p class="eyebrow truncate">{{ grade.label }}</p>
+            <p class="mt-1 text-2xl font-black leading-none tracking-tight text-ink dark:text-white">
+              {% if grade.quote.price %}&#8369;{{ grade.quote.price|floatformat:2 }}{% else %}&mdash;{% endif %}
+            </p>
+            <p class="mt-2"><span class="{{ grade.quote.badge_class }}">{{ grade.quote.tier_label }}</span></p>
+            {% if grade.quote.detail %}
+              <p class="mt-1.5 text-[11px] leading-snug text-ink-muted dark:text-slate-400">
+                {{ grade.quote.detail }}{% if grade.quote.as_of %} · {{ grade.quote.as_of|date:"d M Y" }}{% endif %}
+              </p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">History</p>
+          <p class="text-sm font-bold text-ink dark:text-white">Prices recorded here</p>
+        </div>
+        <form method="get" class="flex items-center gap-2">
+          <select name="fuel" class="form-control min-h-[34px] w-auto py-1 text-xs" data-autosubmit>
+            {% for value, label in fuel_choices %}
+              <option value="{{ value }}" {% if value == fuel %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+
+      {% if history %}
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table min-w-[420px]">
+            <thead>
+              <tr><th>When</th><th>Source</th><th class="text-right">Price</th><th>Note</th></tr>
+            </thead>
+            <tbody>
+              {% for observation in history %}
+                <tr>
+                  <td class="whitespace-nowrap">{{ observation.observed_at|date:"d M Y, H:i" }}</td>
+                  <td class="whitespace-nowrap">
+                    <span class="{% if observation.source == 'fill_up' %}badge-success{% else %}badge-info{% endif %}">
+                      {{ observation.get_source_display }}
+                    </span>
+                  </td>
+                  <td class="text-right mono font-bold">&#8369;{{ observation.price|floatformat:2 }}</td>
+                  <td class="text-ink-muted dark:text-slate-400">{{ observation.note|default:"" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="panel-pad">
+          <p class="text-sm text-ink-muted dark:text-slate-400">
+            No {{ fuel }} price recorded here yet. Note the board next time you pass &mdash;
+            it takes ten seconds and it is worth more than any estimate.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if fill_ups %}
+      <div class="panel">
+        <div class="panel-header">
+          <div class="min-w-0">
+            <p class="eyebrow">Your visits</p>
+            <p class="text-sm font-bold text-ink dark:text-white">Fill-ups at this station</p>
+          </div>
+        </div>
+        <div class="table-wrap rounded-t-none border-0">
+          <table class="table min-w-[520px]">
+            <thead>
+              <tr>
+                <th>When</th><th>Vehicle</th>
+                <th class="text-right">Litres</th>
+                <th class="text-right">Per litre</th>
+                <th class="text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fill_up in fill_ups %}
+                <tr>
+                  <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y" }}</td>
+                  <td>{{ fill_up.vehicle.name }}</td>
+                  <td class="text-right mono">{{ fill_up.liters|floatformat:2 }}</td>
+                  <td class="text-right mono">{{ fill_up.price_per_liter|floatformat:2 }}</td>
+                  <td class="text-right mono font-bold">&#8369;{{ fill_up.total_cost|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="min-w-0 space-y-5">
+    <form method="post" class="panel min-w-0">
+      {% csrf_token %}
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Add</p>
+          <p class="text-sm font-bold text-ink dark:text-white">Note a price board</p>
+        </div>
+      </div>
+      <div class="panel-pad space-y-4">
+        <p class="text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+          Saw the price without buying? Record it. It counts as first-hand and outranks
+          the regional advisory for this station.
+        </p>
+        {% include "partials/_field.html" with field=form.fuel_type %}
+        {% include "partials/_field.html" with field=form.price %}
+        {% include "partials/_field.html" with field=form.observed_at %}
+        {% include "partials/_field.html" with field=form.note %}
+        <button type="submit" class="btn-primary w-full">Save price</button>
+      </div>
+    </form>
+
+    {% if spend.visits %}
+      <div class="panel panel-pad">
+        <p class="eyebrow">Your record here</p>
+        <dl class="mt-3 space-y-2.5">
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Visits</dt>
+            <dd class="mono font-black text-ink dark:text-white">{{ spend.visits }}</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Total spent</dt>
+            <dd class="mono font-black text-ink dark:text-white">&#8369;{{ spend.total|floatformat:2|intcomma }}</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Cheapest &#8369;/L</dt>
+            <dd class="mono font-black text-brand-700 dark:text-brand-400">{{ spend.cheapest|floatformat:2 }}</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Dearest &#8369;/L</dt>
+            <dd class="mono font-black text-ink dark:text-white">{{ spend.dearest|floatformat:2 }}</dd>
+          </div>
+        </dl>
+      </div>
+    {% endif %}
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">Station</p>
+      <dl class="mt-3 space-y-2.5 text-[13px]">
+        {% if station.brand %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Brand</dt>
+            <dd class="text-ink-muted dark:text-slate-400">{{ station.brand }}</dd></div>
+        {% endif %}
+        {% if station.street %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Street</dt>
+            <dd class="break-words text-ink-muted dark:text-slate-400">{{ station.street }}</dd></div>
+        {% endif %}
+        {% if station.opening_hours %}
+          <div><dt class="font-bold text-ink-soft dark:text-slate-300">Opening hours</dt>
+            <dd class="break-words text-ink-muted dark:text-slate-400">{{ station.opening_hours }}</dd></div>
+        {% endif %}
+        <div><dt class="font-bold text-ink-soft dark:text-slate-300">Coordinates</dt>
+          <dd class="mono text-ink-muted dark:text-slate-400">{{ station.latitude }}, {{ station.longitude }}</dd></div>
+      </dl>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        <a href="https://www.google.com/maps/dir/?api=1&amp;destination={{ station.latitude }},{{ station.longitude }}"
+           target="_blank" rel="noopener" class="btn-ghost btn-sm">Directions</a>
+        <a href="{{ station.osm_url }}" target="_blank" rel="noopener" class="btn-ghost btn-sm">View on OSM</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

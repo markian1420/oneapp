@@ -1,0 +1,19 @@
+{
+  "name": "OneApp - Spend & savings",
+  "short_name": "OneApp",
+  "description": "Fuel, grocery and utility spend tracking with a live station map.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f8f5",
+  "theme_color": "#15803d",
+  "icons": [
+    {
+      "src": "/static/img/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
