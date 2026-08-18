@@ -34,6 +34,7 @@ PLACE_KIND_CATEGORY = {
     "fast_food": SpendCategory.DINING,
     "restaurant": SpendCategory.DINING,
     "mall": SpendCategory.APPAREL,
+    "clothes": SpendCategory.APPAREL,
     "pharmacy": SpendCategory.HEALTH,
 }
 

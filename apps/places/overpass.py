@@ -191,6 +191,7 @@ KIND_SELECTORS = {
     "fast_food": [('"amenity"="fast_food"',)],
     "restaurant": [('"amenity"="restaurant"',)],
     "mall": [('"shop"="mall"',), ('"shop"="department_store"',)],
+    "clothes": [('"shop"="clothes"',), ('"shop"="shoes"',)],
     "pharmacy": [('"amenity"="pharmacy"',)],
 }
 

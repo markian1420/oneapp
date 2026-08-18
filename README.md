@@ -9,6 +9,7 @@ presented as a fact.
 | **Map** | What is around me, nearest first — 17,648 places across 8 kinds |
 | **Fuel** | Where should I actually refuel, once the detour is paid for |
 | **Grocery** | What is cheap this week, from the DA daily index |
+| **Where to buy** | What is near me, what I paid there, what promos are running |
 | **Spending** | Where the money went, and did the lines add up |
 | **Promos** | What is running, and more importantly what has expired |
 | **Wardrobe** | Was that jacket worth it — cost per wear |
@@ -372,6 +373,34 @@ review after two months.
 
 **Spend → Wardrobe** tracks cost per wear. Tick *track wears* on a clothing line,
 then tap *Wore it* when you use it. Unworn items lead the list.
+
+### Where to buy
+
+**Spend → Where to buy** answers "I am in Pasig, where do I get this" for
+groceries, dining, clothing and pharmacy. Share a location and it lists what is
+nearest, with three things attached to each place:
+
+- **distance**, which it knows exactly;
+- **promos naming that brand**, which the banks publish and which are real;
+- **what you paid there**, once you have logged a basket.
+
+It is **ordered by distance, not price, and says so on the screen.** Fuel can be
+ranked by price because the DOE publishes a weekly advisory for every brand. No
+Philippine supermarket publishes shelf prices at all, so the only per-store
+grocery price that can ever exist is one off your own receipt. Ranking shops by
+a number the app does not have would be inventing it.
+
+Two deliberate refinements:
+
+- **Supermarkets and markets outrank convenience stores.** Metro Manila has
+  3,670 convenience stores against 733 supermarkets, so by distance alone the
+  answer to "where do I buy chicken" was nine 7-Elevens — technically nearest,
+  useless as advice.
+- **Category-wide promos are listed once, beside the table**, not against every
+  row. Showing "23 promos" against every mall made them all look identical.
+
+Where the DA tracks the item, its regional price appears as a benchmark for what
+a fair ask looks like — explicitly not a shelf price.
 
 ### Today — the briefing
 

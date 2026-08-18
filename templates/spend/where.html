@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {% if origin %}{{ options|length }} places near you{% else %}Share your location to see what is nearby{% endif %}
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" id="locate" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="locate" class="h-4 w-4" %}
+    Use my location
+  </button>
+{% endblock %}
+
+{% block content %}
+<form method="get" class="panel panel-pad mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" id="filters">
+  <input type="hidden" name="lat" id="lat" value="{% if origin %}{{ origin.0 }}{% endif %}">
+  <input type="hidden" name="lng" id="lng" value="{% if origin %}{{ origin.1 }}{% endif %}">
+
+  <label class="min-w-0">
+    <span class="form-label">Buying</span>
+    <select name="category" class="form-control" data-autosubmit>
+      {% for value, label in categories %}
+        <option value="{{ value }}" {% if value == category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="min-w-0 sm:col-span-2">
+    <span class="form-label">What exactly</span>
+    <input type="search" name="q" value="{{ item }}" class="form-control"
+           placeholder="Chicken breast, rice, shoes…">
+  </label>
+
+  <div class="flex items-end">
+    <button type="submit" class="btn-primary btn-sm w-full">Find</button>
+  </div>
+</form>
+
+{% if not origin %}
+  <div class="panel panel-pad text-center">
+    <p class="text-sm font-bold text-ink dark:text-white">Where are you?</p>
+    <p class="mx-auto mt-1 max-w-lg text-sm text-ink-muted dark:text-slate-400">
+      This screen ranks what is closest to you, so it needs a location. Nothing is
+      sent anywhere but this app, and it is not stored.
+    </p>
+    <button type="button" id="locate-empty" class="btn-primary btn-sm mt-4">
+      Use my location
+    </button>
+  </div>
+{% else %}
+
+  {% if reference %}
+    <div class="panel panel-pad mb-5">
+      <p class="eyebrow">Going rate</p>
+      <p class="mt-1 text-2xl font-black tracking-tight text-ink dark:text-white">
+        &#8369;{{ reference.price|floatformat:2 }}
+        <span class="text-sm font-bold text-ink-muted dark:text-slate-400">per {{ reference.unit }}</span>
+      </p>
+      <p class="mt-1 text-[13px] text-ink-soft dark:text-slate-400">
+        {{ reference.commodity.label }} &mdash; DA prevailing price across NCR wet
+        markets, {{ reference.observed_on|date:"d M Y" }}.
+      </p>
+      <p class="mt-2 text-[12px] leading-relaxed text-ink-muted dark:text-slate-500">
+        A benchmark for judging whether an asking price is fair, not a shelf price.
+        A supermarket will usually be above this.
+      </p>
+    </div>
+  {% endif %}
+
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">
+      Sorted by distance, not by price &mdash; and here is why
+    </p>
+    <p class="mt-1 text-[13px] leading-relaxed text-amber-800 dark:text-amber-300">
+      Fuel can be ranked by price because the DOE publishes a weekly advisory for
+      every brand. <strong>No Philippine supermarket publishes shelf prices at
+      all</strong>, so the only per-store grocery price that can ever exist here is
+      one off your own receipt. Ranking shops by a number the app does not have
+      would be inventing it. Log a basket with its lines and those shops start
+      carrying real prices &mdash; yours.
+    </p>
+  </div>
+
+  {% if options %}
+    <div class="table-wrap">
+      <table class="table min-w-[760px]">
+        <thead>
+          <tr>
+            <th>Place</th>
+            <th class="text-right">Distance</th>
+            <th class="text-right">You paid</th>
+            <th>Promos running</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for option in options %}
+            <tr>
+              <td>
+                <a href="{% url 'places:detail' option.place.pk %}"
+                   class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+                  {{ option.place.display_name }}
+                </a>
+                <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">
+                  {{ option.place.get_kind_display }}{% if option.place.locality %} · {{ option.place.locality }}{% endif %}
+                </span>
+              </td>
+              <td class="whitespace-nowrap text-right mono font-bold">{{ option.distance_km }} km</td>
+              <td class="whitespace-nowrap text-right">
+                {% if option.has_price %}
+                  <span class="mono font-bold text-brand-700 dark:text-brand-400">
+                    &#8369;{{ option.your_price|floatformat:2 }}
+                  </span>
+                  <span class="block text-[11px] text-ink-muted dark:text-slate-500">
+                    {{ option.your_visits }} visit{{ option.your_visits|pluralize }}
+                  </span>
+                {% else %}
+                  <span class="badge-muted">not logged</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if option.promos %}
+                  {% for promo in option.promos|slice:":2" %}
+                    <span class="block truncate text-[12px] text-ink-soft dark:text-slate-300">
+                      {% if promo.discount_pct %}<strong class="text-brand-700 dark:text-brand-400">{{ promo.discount_pct|floatformat:"-2" }}%</strong> {% endif %}
+                      {{ promo.title|truncatechars:44 }}
+                      <span class="text-ink-muted dark:text-slate-500">
+                        ({{ promo.qualifies }}{% if promo.days_left is not None %}, {{ promo.days_left }}d left{% endif %})
+                      </span>
+                    </span>
+                  {% endfor %}
+                  {% if option.promos|length > 2 %}
+                    <span class="text-[11px] text-ink-muted dark:text-slate-500">
+                      and {{ option.promos|length|add:"-2" }} more
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-[12px] text-ink-muted dark:text-slate-500">
+                    nothing naming this brand
+                  </span>
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'spend:purchase_create' %}?place={{ option.place.pk }}"
+                   class="btn-ghost btn-sm">Log a buy</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% with general=options.0.general_promos %}
+      {% if general %}
+        <div class="panel panel-pad mt-5">
+          <p class="eyebrow">Running everywhere in this category</p>
+          <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+            {{ general|length }} offer{{ general|pluralize }} that apply at any
+            {{ category }} place, so they are no reason to pick one over another.
+            Listed here once rather than against every row.
+          </p>
+          <ul class="mt-3 space-y-1">
+            {% for promo in general|slice:":5" %}
+              <li class="truncate text-[13px] text-ink-soft dark:text-slate-300">
+                {% if promo.discount_pct %}<strong class="text-brand-700 dark:text-brand-400">{{ promo.discount_pct|floatformat:"-2" }}%</strong> {% endif %}
+                {{ promo.title }}
+                <span class="text-ink-muted dark:text-slate-500">({{ promo.qualifies }})</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="panel panel-pad mt-5">
+      <p class="eyebrow">What this knows so far</p>
+      <dl class="mt-3 grid gap-3 sm:grid-cols-3">
+        <div>
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Places near you</dt>
+          <dd class="mono text-lg font-black text-ink dark:text-white">{{ options|length }}</dd>
+        </div>
+        <div>
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">With a price you logged</dt>
+          <dd class="mono text-lg font-black {% if priced %}text-brand-700 dark:text-brand-400{% else %}text-ink-muted dark:text-slate-500{% endif %}">
+            {{ priced|length }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">With a promo running</dt>
+          <dd class="mono text-lg font-black {% if with_promos %}text-brand-700 dark:text-brand-400{% else %}text-ink-muted dark:text-slate-500{% endif %}">
+            {{ with_promos|length }}
+          </dd>
+        </div>
+      </dl>
+      {% if not priced %}
+        <p class="mt-3 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+          No prices of your own yet, so the middle column is empty everywhere. One
+          logged basket with its lines fills it in for that shop permanently, and the
+          second one lets this screen actually compare.
+        </p>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="panel panel-pad text-center">
+      <p class="text-sm font-bold text-ink dark:text-white">Nothing of that kind within 8km.</p>
+      <p class="mt-1 text-sm text-ink-muted dark:text-slate-400">
+        Try another category, or import more places for the area.
+      </p>
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  function locate() {
+    if (!navigator.geolocation) {
+      window.alert('This browser will not share a location.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      // Fed straight back through the form so the ranking is a plain GET and
+      // the result stays a shareable, bookmarkable URL.
+      document.getElementById('lat').value = pos.coords.latitude;
+      document.getElementById('lng').value = pos.coords.longitude;
+      document.getElementById('filters').submit();
+    }, function () {
+      window.alert('Could not get a location.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  }
+
+  ['locate', 'locate-empty'].forEach(function (id) {
+    var button = document.getElementById(id);
+    if (button) button.addEventListener('click', locate);
+  });
+})();
+</script>
+{% endblock %}

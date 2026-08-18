@@ -33,6 +33,7 @@ class PlaceKind(models.TextChoices):
     FAST_FOOD = "fast_food", "Fast food"
     RESTAURANT = "restaurant", "Restaurant"
     MALL = "mall", "Mall or department store"
+    CLOTHES = "clothes", "Clothing shop"
     PHARMACY = "pharmacy", "Pharmacy"
 
 
@@ -47,6 +48,7 @@ KIND_STYLE = {
     PlaceKind.FAST_FOOD: {"icon": "receipt", "tone": "red"},
     PlaceKind.RESTAURANT: {"icon": "receipt", "tone": "rose"},
     PlaceKind.MALL: {"icon": "wallet", "tone": "violet"},
+    PlaceKind.CLOTHES: {"icon": "shirt", "tone": "rose"},
     PlaceKind.PHARMACY: {"icon": "shield-check", "tone": "teal"},
 }
 

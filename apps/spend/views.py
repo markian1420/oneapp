@@ -13,6 +13,7 @@ from apps.core.tables import Column, build_list_table, build_table
 from apps.core.views import module
 
 from .forms import ItemForm, PromoForm, PurchaseForm
+from .shopping import CATEGORY_KINDS, reference_price, where_to_buy
 from .models import Promo, Purchase, PurchaseItem
 from .services import (
     card_promos_at,
@@ -236,4 +237,42 @@ def card_promos(request):
         "category": category,
         "expiring": [p for p in live if p.days_left is not None and p.days_left <= 7],
         "undated": [p for p in live if p.undated],
+    })
+
+
+@login_required
+@module("spend_where", "Where to buy")
+def where(request):
+    """Nearest places that sell what you are after, and what is known there.
+
+    Ordered by distance, not price. Ranking by price would imply the app knows
+    what each shop charges, and outside fuel it does not - so it leads with
+    what it does know and shows the gaps as gaps.
+    """
+    category = request.GET.get("category", "")
+    if category not in CATEGORY_KINDS:
+        category = SpendCategory.GROCERY
+
+    item = request.GET.get("q", "").strip()
+
+    origin = None
+    try:
+        origin = (float(request.GET["lat"]), float(request.GET["lng"]))
+    except (KeyError, ValueError):
+        pass
+
+    options = where_to_buy(origin=origin, category=category, item=item) if origin else []
+
+    return render(request, "spend/where.html", {
+        "options": options,
+        "origin": origin,
+        "category": category,
+        "categories": [
+            (value, label) for value, label in SpendCategory.choices
+            if value in CATEGORY_KINDS
+        ],
+        "item": item,
+        "reference": reference_price(item) if item else None,
+        "priced": [o for o in options if o.has_price],
+        "with_promos": [o for o in options if o.promos],
     })
