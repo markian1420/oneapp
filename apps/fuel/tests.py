@@ -700,3 +700,53 @@ class PriceCoverageTests(TestCase):
         quotes = quotes_for(stations, "gas_95")
         self.assertTrue(all(q.price == Decimal("77.20") for q in quotes.values()))
         self.assertTrue(all(q.tier == PriceTier.ESTIMATED for q in quotes.values()))
+
+
+class PriceBandTests(TestCase):
+    """A market survey reports a range; the spread is the useful half."""
+
+    def test_an_unbranded_station_gets_the_estimated_tier_not_advisory(self):
+        # A station OSM never tagged has an empty brand. Matching it against
+        # the blank-brand prevailing row at the advisory tier would dress a
+        # regional median up as a brand-specific figure.
+        unbranded = make_station(osm_id=900, brand="")
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="",
+            fuel_type="gas_95", price=Decimal("81.60"),
+        )
+
+        quote = quotes_for([unbranded], "gas_95")[unbranded.pk]
+        self.assertEqual(quote.tier, PriceTier.ESTIMATED)
+
+    def test_a_branded_station_still_prefers_its_brand_row(self):
+        branded = make_station(osm_id=901, brand="Petron")
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="",
+            fuel_type="gas_95", price=Decimal("81.60"),
+        )
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="Petron",
+            fuel_type="gas_95", price=Decimal("83.00"),
+        )
+
+        quote = quotes_for([branded], "gas_95")[branded.pk]
+        self.assertEqual(quote.tier, PriceTier.ADVISORY)
+        self.assertEqual(quote.price, Decimal("83.00"))
+
+    def test_the_spread_is_reported_per_litre_and_per_tank(self):
+        advisory = DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="",
+            fuel_type="gas_91", price=Decimal("79.00"),
+            low=Decimal("67.80"), high=Decimal("90.77"), sample_size=1292,
+        )
+        # A per-litre gap is easy to shrug at; a tank of it is not.
+        self.assertEqual(advisory.spread, Decimal("22.970"))
+        self.assertEqual(advisory.spread_on_a_tank, Decimal("918.80"))
+
+    def test_a_row_with_no_range_reports_no_spread(self):
+        advisory = DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="Petron",
+            fuel_type="gas_95", price=Decimal("83.00"),
+        )
+        self.assertIsNone(advisory.spread)
+        self.assertIsNone(advisory.spread_on_a_tank)

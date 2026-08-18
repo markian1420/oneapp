@@ -112,7 +112,11 @@ def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
             )
             continue
 
-        advisory = by_brand.get((place.region, place.brand))
+        # Requires a brand on both sides. A station OSM never tagged has an
+        # empty brand, which would otherwise match the blank-brand prevailing
+        # row here and get a regional median labelled as a brand advisory -
+        # a stronger claim than the number deserves.
+        advisory = by_brand.get((place.region, place.brand)) if place.brand else None
         if advisory:
             resolved[place.pk] = Quote(
                 price=advisory.price,

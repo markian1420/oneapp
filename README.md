@@ -46,7 +46,7 @@ varies enormously. This table is the single most useful thing in this file:
 
 | Category | Official feed | Cadence | Fallback |
 |---|---|---|---|
-| **Fuel** | DOE weekly advisory (brand + region) | Weekly, Tuesdays | Your receipts |
+| **Fuel** | DOE weekly advisory (brand + region), **GasWatch PH survey** | Weekly | Your receipts |
 | **Grocery commodities** | **DA Daily Price Index (NCR)** | **Daily** | — |
 | **Packaged goods** | DTI SRP bulletin | Occasional | Your receipts |
 | **Supermarket SKUs** | None | — | Your receipts only |
@@ -270,6 +270,40 @@ tags — only about 13% of Philippine stations carry `addr:province`, but every
 station inside Rizal's boundary is in Rizal. A `--bbox` import has no boundary
 to derive from, so those stations fall back to whatever the tags admit to and
 may end up with no region, and therefore no advisory baseline.
+
+### Fuel prices, from the GasWatch PH survey
+
+The DOE's own site returns HTTP 500 on every endpoint, which leaves the fuel map
+with nothing. GasWatch PH publishes a JSON endpoint covering **1,292 Metro Manila
+stations across five grades**, and its `robots.txt` allows it.
+
+```powershell
+.\.venv\Scripts\python.exe manage.py import_gaswatch
+```
+
+**Imported as a regional price band, not per-station prices.** Their payload keys
+stations by an opaque numeric id with no name, brand or coordinates published
+anywhere on the site, so there is no honest way to attach a figure to a
+particular pump — and GasWatch themselves describe the values as derived from the
+weekly DOE advisory rather than observed at a pump.
+
+So the **median becomes the region's prevailing price**, which lands at the
+*Estimated* tier where a regional figure belongs and finally gives all 1,059
+mapped stations a number. Anything you log yourself still outranks it.
+
+The **spread is imported alongside it**, and is the more interesting half:
+
+| Grade | Min | Median | Max | Spread |
+|---|---|---|---|---|
+| Unleaded (RON 91) | ₱67.80 | ₱79.00 | ₱90.77 | **₱22.97** |
+| RON 95 | ₱68.80 | ₱81.60 | ₱96.97 | ₱28.17 |
+| Diesel | ₱85.10 | ₱91.30 | ₱97.70 | ₱12.60 |
+
+₱22.97 a litre on unleaded is about **₱919 on a 40-litre tank** — which is the
+entire argument for comparing stations, in real numbers.
+
+GasWatch states no reuse licence, so this is for personal use, and every row
+records the source.
 
 ### Grocery commodity prices, from the DA
 

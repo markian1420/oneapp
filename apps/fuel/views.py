@@ -67,8 +67,15 @@ def price_coverage() -> dict:
     advisory_rows = DOEAdvisory.objects.filter(week_of=week).count()
     latest = DOEAdvisory.objects.order_by("-week_of").first()
 
+    band = (
+        DOEAdvisory.objects.filter(week_of=week, brand="", low__isnull=False)
+        .order_by("-sample_size")
+        .first()
+    )
+
     return {
         "week": week,
+        "band": band,
         "advisory_rows": advisory_rows,
         "latest_advisory": latest,
         "logged_places": (

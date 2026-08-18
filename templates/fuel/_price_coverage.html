@@ -50,8 +50,30 @@
   <div class="mb-5 flex flex-wrap items-center gap-2 text-[12px]">
     <span class="badge-success">Priced</span>
     <span class="text-ink-muted dark:text-slate-400">
-      {{ coverage.advisory_rows }} advisory price{{ coverage.advisory_rows|pluralize }} for the week of
+      {{ coverage.advisory_rows }} price{{ coverage.advisory_rows|pluralize }} for the week of
       {{ coverage.week|date:"d M Y" }}{% if coverage.logged_places %} · {{ coverage.logged_places }} station{{ coverage.logged_places|pluralize }} with your own price{% endif %}
     </span>
   </div>
+
+  {% if coverage.band and coverage.band.spread %}
+    <div class="panel panel-pad mb-5">
+      <p class="eyebrow">Why it is worth comparing at all</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Across {{ coverage.band.sample_size }} Metro Manila pumps surveyed,
+        {{ coverage.band.get_fuel_type_display|lower }} runs from
+        <strong class="text-ink dark:text-white">&#8369;{{ coverage.band.low|floatformat:2 }}</strong>
+        to
+        <strong class="text-ink dark:text-white">&#8369;{{ coverage.band.high|floatformat:2 }}</strong>
+        &mdash; a gap of &#8369;{{ coverage.band.spread|floatformat:2 }} a litre, or about
+        <strong class="text-brand-700 dark:text-brand-400">&#8369;{{ coverage.band.spread_on_a_tank|floatformat:0 }}</strong>
+        on a 40-litre tank.
+      </p>
+      <p class="mt-2 text-[12px] leading-relaxed text-ink-muted dark:text-slate-500">
+        Stations show the median of that survey, which is why they read
+        <em>Estimated</em> rather than a price for that pump. Log a fill-up and the
+        station you actually use starts carrying a real one.
+        {% if coverage.band.source_note %}Survey: {{ coverage.band.source_note }}.{% endif %}
+      </p>
+    </div>
+  {% endif %}
 {% endif %}

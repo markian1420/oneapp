@@ -11,6 +11,8 @@ price at all when the decision is "is this detour worth it".
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -107,6 +109,24 @@ class DOEAdvisory(models.Model):
         max_digits=7, decimal_places=3, validators=[MinValueValidator(0)]
     )
 
+    # A market survey reports a range, not a single number. The DOE bulletin
+    # gives one figure per brand; a survey of 1,292 pumps gives a median and a
+    # spread, and the spread is the more interesting half - it is the reason
+    # driving past one station to another is worth anything.
+    low = models.DecimalField(
+        max_digits=7, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Cheapest price seen in this region, where the source reports one.",
+    )
+    high = models.DecimalField(
+        max_digits=7, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    sample_size = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="How many stations the figure was drawn from.",
+    )
+
     source_url = models.URLField(blank=True)
     source_note = models.CharField(max_length=200, blank=True)
     fetched_at = models.DateTimeField(default=timezone.now)
@@ -131,6 +151,23 @@ class DOEAdvisory(models.Model):
     def __str__(self) -> str:
         brand = self.brand or "prevailing"
         return f"{self.week_of} {self.region} {brand} {self.fuel_type} @ {self.price}"
+
+    @property
+    def spread(self):
+        """The gap between the cheapest and dearest pump surveyed."""
+        if self.low is None or self.high is None:
+            return None
+        return self.high - self.low
+
+    @property
+    def spread_on_a_tank(self):
+        """What that gap is worth on a 40-litre fill, in pesos.
+
+        A per-litre spread is easy to shrug at. The same number multiplied by a
+        tank is what makes the case for driving past one station to another.
+        """
+        gap = self.spread
+        return (gap * 40).quantize(Decimal("0.01")) if gap is not None else None
 
 
 class Vehicle(models.Model):
