@@ -1,0 +1,36 @@
+# A fresh database has no account, the app is login-only, and the free web
+# service has no shell. This is the way in: run it once by hand after the first
+# deploy. It is never scheduled and never runs on a push.
+name: Create admin user
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Create the account
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "False"
+          DJANGO_SUPERUSER_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          DJANGO_SUPERUSER_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          DJANGO_SUPERUSER_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        # Migrations first: a deploy may not have booted yet, and an empty
+        # database has no auth tables to put the account in.
+        run: |
+          python manage.py migrate --noinput
+          python manage.py createsuperuser --noinput

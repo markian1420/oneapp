@@ -262,45 +262,62 @@ Two consequences worth knowing before relying on it:
    string. It looks like
    `postgres://user:password@host/dbname?sslmode=require`.
 
-2. **Move the existing data across.** From a checkout with the local SQLite
-   database, dump everything except the tables Django rebuilds by itself:
-
-   ```powershell
-   .\.venv\Scripts\python.exe manage.py dumpdata `
-     --natural-foreign --natural-primary `
-     --exclude contenttypes --exclude auth.permission --exclude sessions `
-     --indent 2 --output transfer.json
-   ```
-
-   Then point at Neon and load it:
-
-   ```powershell
-   $env:DATABASE_URL = "postgres://user:password@host/dbname?sslmode=require"
-   .\.venv\Scripts\python.exe manage.py migrate
-   .\.venv\Scripts\python.exe manage.py loaddata transfer.json
-   Remove-Item transfer.json
-   Remove-Item Env:\DATABASE_URL
-   ```
-
-   The dump includes the user accounts, so the same login works on the
-   deployed app. Delete `transfer.json` afterwards - it is a copy of the whole
-   database and belongs nowhere near the repository.
-
-3. **Create the web service.** In Render, create a Blueprint from this
+2. **Create the web service.** In Render, create a Blueprint from this
    repository. `render.yaml` describes the service; the only value Render will
-   ask for is `DATABASE_URL`, because it is deliberately not in the file.
+   ask for is `DATABASE_URL`, because it is deliberately not in the file. The
+   container runs migrations as it boots, so the schema appears on the first
+   deploy.
 
-4. **Give the workflow its secrets.** In the GitHub repository settings, under
-   Secrets and variables > Actions, add:
+3. **Give the workflows their secrets.** In the GitHub repository settings,
+   under Secrets and variables > Actions, add:
 
    | Secret | Value |
    |---|---|
    | `DATABASE_URL` | The same Neon connection string |
    | `DJANGO_SECRET_KEY` | Any random value; the refresh signs nothing |
+   | `ADMIN_USERNAME` | The account you will log in with |
+   | `ADMIN_EMAIL` | Its email address |
+   | `ADMIN_PASSWORD` | Its password, at least 10 characters |
 
-5. **Check it.** Open the Render URL, log in, and run the workflow once by hand
-   from the Actions tab (`Refresh data` > `Run workflow`) rather than waiting
-   for the schedule.
+4. **Create your login.** A new database has no account and the app is
+   login-only, so run `Create admin user` once from the Actions tab. The free
+   web service has no shell, which is why this is a workflow rather than a
+   command you run against it.
+
+5. **Fill the database.** Run `Refresh data` from the Actions tab with `only`
+   set to `places_osm`. That is the slow one - hundreds of Overpass queries -
+   and without it the maps have nothing to draw. Then run `Refresh data` again
+   with `only` empty to pull the fuel baselines, the commodity index and the
+   card promos.
+
+6. **Check it.** Open the Render URL and log in. The overview screen reports
+   how fresh each source is, which is the quickest confirmation that the
+   scheduled refresh is reaching the same database.
+
+#### Moving an existing local database across instead
+
+If there is already data in the local SQLite file worth keeping, load it rather
+than re-importing. `PYTHONUTF8` is not optional: place names carry characters
+the Windows locale codec cannot encode, and the dump dies on the first one.
+
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv\Scripts\python.exe manage.py dumpdata `
+  --natural-foreign --natural-primary `
+  --exclude contenttypes --exclude auth.permission --exclude sessions `
+  --indent 2 --output $env:TEMP\transfer.json
+
+$env:DATABASE_URL = "postgres://user:password@host/dbname?sslmode=require"
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py loaddata $env:TEMP\transfer.json
+Remove-Item $env:TEMP\transfer.json
+Remove-Item Env:\DATABASE_URL
+```
+
+The dump carries the user accounts, so step 4 is unnecessary after it. It is
+written outside the project and deleted afterwards: it is a plain-text copy of
+the whole database, password hashes included. This needs a direct connection to
+the database, which many office networks refuse - see Troubleshooting.
 
 ### The scheduled refresh
 
@@ -310,9 +327,10 @@ current costs nothing, and `--strict` makes a failed source fail the run, so
 GitHub emails about a feed that has gone quiet instead of the data silently
 ageing. The overview screen shows the same staleness from the other side.
 
-Places are not in the routine refresh. Re-import them by hand every few months
-with `refresh_all --only places_osm`, locally or through the workflow's manual
-run.
+Places are not in the routine refresh. Re-import them every few months by
+running the workflow by hand with its `only` input set to `places_osm`, which
+takes that path instead of the due-source pass. Any source key works there when
+one needs catching up.
 
 GitHub disables scheduled workflows in a repository with no activity for 60
 days. A commit, or one manual run, resets that.
@@ -392,6 +410,13 @@ their region; bounding-box imports may lack a region.
 
 **`database is locked` during an import.** SQLite allows one writer. Run imports
 one at a time or move to Postgres with `DATABASE_URL`.
+
+**Connecting to the hosted Postgres times out or is refused.** Many corporate
+networks block outbound port 5432 while leaving 443 open, so the database is
+unreachable from the office even though the deployed app and the scheduled
+refresh reach it perfectly well - they connect from elsewhere. Run anything
+that needs a direct connection, the initial data transfer in particular, from
+a network that permits it.
 
 **`import_places` reports that Overpass would not answer.** Public Overpass
 instances rate-limit and return 504/HTML errors under load. Re-run later or

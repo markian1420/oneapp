@@ -11,6 +11,14 @@ on:
     - cron: "0 23 * * *"
     - cron: "0 11 * * *"
   workflow_dispatch:
+    inputs:
+      only:
+        description: >-
+          Space-separated source keys to refresh instead of the due ones, for
+          example "places_osm". Places are never in a scheduled run: the import
+          is hundreds of queries against Overpass instances that rate-limit.
+        required: false
+        default: ""
 
 concurrency:
   # SQLite is not in play here, but two importers writing the same rows at once
@@ -21,7 +29,9 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A scheduled pass takes minutes. The ceiling is here for a hand-run places
+    # import, which walks the city in tiles and waits out rate limiting.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -33,11 +43,24 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Refresh due sources
+      - name: Refresh sources
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "False"
+          # Read through the environment rather than interpolated into the
+          # script: a workflow input is untrusted text.
+          ONLY: ${{ inputs.only }}
         # --strict so a source that fails turns the run red and GitHub mails
-        # about it. Without it a feed could be down for weeks unnoticed.
-        run: python manage.py refresh_all --due-only --strict
+        # about it. Without it a feed could be down for weeks unnoticed. A
+        # hand-picked run says what it wants, so neither flag applies.
+        run: |
+          if [ -n "$ONLY" ]; then
+            args=""
+            for key in $ONLY; do
+              args="$args --only $key"
+            done
+            python manage.py refresh_all $args
+          else
+            python manage.py refresh_all --due-only --strict
+          fi
