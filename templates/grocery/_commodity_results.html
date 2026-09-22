@@ -60,7 +60,7 @@
     <p class="text-sm font-bold text-ink dark:text-white">Nothing matches.</p>
     <p class="mt-1 text-sm text-ink-muted dark:text-slate-400">
       {% if q or category %}
-        Try a wider search, or <a href="{% url 'grocery:commodities' %}" class="font-bold text-brand-700 underline">reset the filters</a>.
+        Try a wider search, or <a href="{% url 'grocery:commodities' %}" class="font-bold text-brand-700 underline dark:text-brand-400">reset the filters</a>.
       {% else %}
         Load the DA index first: <code class="kbd">python manage.py import_da_prices --backfill 16</code>
       {% endif %}

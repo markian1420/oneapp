@@ -226,18 +226,18 @@ PRICE_FRESH_DAYS = env.int("PRICE_FRESH_DAYS", default=14)
 # never receives the whole table; it asks for the box it is looking at.
 MAP_MAX_STATIONS = env.int("MAP_MAX_STATIONS", default=300)
 
-# OSM Foundation's public tile server may return 403s when a network or app is
-# blocked by policy enforcement, so the browser map uses an OSM-derived hosted
-# basemap that can be swapped from the environment.
+# OSM's own tile server, which serves without a key. CARTO's hosted basemap was
+# the default until it began stamping "API key required" across every tile; the
+# OSM Foundation's usage policy covers an app this size, and a busier one is
+# expected to move to a provider it pays. Both are swappable from the
+# environment, which is what a keyed provider would need.
 MAP_TILE_URL = env(
     "MAP_TILE_URL",
-    default="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    default="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
 )
 MAP_TILE_ATTRIBUTION = env(
     "MAP_TILE_ATTRIBUTION",
-    default=(
-        "&copy; OpenStreetMap contributors &copy; CARTO"
-    ),
+    default="&copy; OpenStreetMap contributors",
 )
 MAP_TILE_MAX_ZOOM = env("MAP_TILE_MAX_ZOOM")
 

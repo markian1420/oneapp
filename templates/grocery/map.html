@@ -138,7 +138,7 @@
       (store.price ? '<p class="text-xs text-ink-muted dark:text-slate-400">from ' + store.visits + ' basket line' + (store.visits === 1 ? '' : 's') + '</p>' : '') +
       (differenceText(store) ? '<p class="mt-1 text-xs font-bold text-brand-700 dark:text-brand-400">' + escapeHtml(differenceText(store)) + '</p>' : '') +
       (store.distance_km ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">about ' + store.distance_km + ' km away</p>' : '') +
-      '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + store.url + '">Open place</a></p>'
+      '<p class="mt-2"><a class="font-bold text-brand-700 underline dark:text-brand-400" href="' + store.url + '">Open place</a></p>'
     );
     return marker;
   }

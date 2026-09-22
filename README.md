@@ -138,19 +138,21 @@ Configuration lives in `.env`; `.env.example` documents the local defaults.
 | `OVERPASS_TIMEOUT` | `180` | Overpass request timeout in seconds |
 | `PRICE_FRESH_DAYS` | `14` | Freshness window for first-hand station prices |
 | `MAP_MAX_STATIONS` | `300` | Maximum fuel station markers returned for one viewport; grocery caps lower in the view |
-| `MAP_TILE_URL` | CARTO Positron raster tiles | Browser basemap tile URL |
-| `MAP_TILE_ATTRIBUTION` | OpenStreetMap/CARTO credit | Attribution shown on Leaflet maps |
+| `MAP_TILE_URL` | OpenStreetMap raster tiles | Browser basemap tile URL |
+| `MAP_TILE_ATTRIBUTION` | OpenStreetMap credit | Attribution shown on Leaflet maps |
 | `MAP_TILE_MAX_ZOOM` | `19` | Maximum zoom for the configured tile provider |
 
-The default tile provider is CARTO's OSM-derived Positron layer:
+The default tile provider is OSM's own server:
 
 ```text
-https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
+https://tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
-This avoids depending directly on `tile.openstreetmap.org`, which can return
-403 when an app does not meet OSM Foundation tile-server requirements. Keep the
-attribution visible when changing tile providers.
+It serves without a key, which CARTO's hosted basemap - the previous default -
+no longer does: it now stamps "API key required" across every tile. An app of
+this size sits inside the OSM Foundation's tile usage policy; a busier one is
+expected to move to a provider it pays, which is a change of `MAP_TILE_URL` and
+nothing else. Keep the attribution visible whichever provider is in use.
 
 ## Running Locally
 
@@ -393,10 +395,13 @@ catching up:
 
 **The page has no styling.** Run `npm run build`.
 
-**The map controls appear but the basemap is blank or returns 403.** The tile
-provider is blocked or unreachable. Leave the default CARTO settings in place,
-or set `MAP_TILE_URL`, `MAP_TILE_ATTRIBUTION`, and `MAP_TILE_MAX_ZOOM` to another
-Leaflet-compatible raster XYZ provider.
+**The map controls appear but the basemap is blank, watermarked, or returns
+403.** The tile provider is blocked, unreachable, or wants a key it has not been
+given - CARTO, the previous default, now stamps "API key required" across every
+tile it serves without one. The default is OSM's own server, which needs no key.
+Point `MAP_TILE_URL`, `MAP_TILE_ATTRIBUTION`, and `MAP_TILE_MAX_ZOOM` at any
+other Leaflet-compatible raster XYZ provider, key included in the URL if it
+wants one.
 
 **The grocery map has stores but no item prices.** That is expected until there
 are recorded basket lines for that item at those stores. The DA NCR price is a

@@ -167,12 +167,12 @@
         '<p class="font-bold text-ink dark:text-white">' + escapeHtml(station.name) + '</p>' +
         '<p class="text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(station.city || '') + '</p>' +
         '<p class="mt-2 text-base font-black text-ink dark:text-white">' +
-          (station.price ? peso.format(station.price) + '<span class="text-xs font-bold text-ink-muted">/L</span>' : 'No price on record') +
+          (station.price ? peso.format(station.price) + '<span class="text-xs font-bold text-ink-muted dark:text-slate-400">/L</span>' : 'No price on record') +
         '</p>' +
         '<p class="mt-1"><span class="' + badgeClass(station.tier) + '">' + escapeHtml(station.tier_label) + '</span></p>' +
         (station.detail ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(station.detail) + '</p>' : '') +
         (station.distance_km ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">about ' + station.distance_km + ' km away</p>' : '') +
-        '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + station.url + '">Open station</a></p>'
+        '<p class="mt-2"><a class="font-bold text-brand-700 underline dark:text-brand-400" href="' + station.url + '">Open station</a></p>'
       );
   }
 
