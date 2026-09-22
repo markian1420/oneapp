@@ -7,6 +7,10 @@ import { dirname, join } from 'node:path';
 
 const files = [
   ['node_modules/leaflet/dist/leaflet.js', 'static/vendor/leaflet/leaflet.js'],
+  // leaflet.js ends with a sourceMappingURL. Collecting static files with
+  // hashed names refuses to leave that reference dangling, so the map comes
+  // along rather than the build failing on it.
+  ['node_modules/leaflet/dist/leaflet.js.map', 'static/vendor/leaflet/leaflet.js.map'],
   ['node_modules/leaflet/dist/leaflet.css', 'static/vendor/leaflet/leaflet.css'],
   ['node_modules/htmx.org/dist/htmx.min.js', 'static/vendor/htmx/htmx.min.js'],
 ];

@@ -1,0 +1,33 @@
+# Render blueprint for the web service. The database is Neon rather than a
+# Render instance: Render's free Postgres expires after a month, and the data
+# here accumulates - fill-ups, prices and the source-run history.
+#
+# DATABASE_URL is marked sync: false so the connection string is entered in the
+# dashboard and never lives in the repository.
+services:
+  - type: web
+    name: oneapp
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: master
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DJANGO_DEBUG
+        value: "False"
+      # The service's own hostname is added at runtime from
+      # RENDER_EXTERNAL_HOSTNAME, so a rename does not need an edit here.
+      - key: DJANGO_ALLOWED_HOSTS
+        value: localhost,127.0.0.1
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+      # Set only because the app really is behind Render's TLS proxy; without
+      # it the redirect above loops and every request looks like plain HTTP.
+      - key: DJANGO_TRUST_PROXY_SSL_HEADER
+        value: "True"
+      - key: DJANGO_LOG_LEVEL
+        value: INFO

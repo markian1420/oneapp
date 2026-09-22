@@ -30,6 +30,7 @@ as different levels of confidence.
 - [Running Locally](#running-locally)
 - [Loading Data](#loading-data)
 - [Tests And Checks](#tests-and-checks)
+- [Deployment](#deployment)
 - [Operational Routine](#operational-routine)
 - [Design And Data Boundaries](#design-and-data-boundaries)
 - [Troubleshooting](#troubleshooting)
@@ -101,6 +102,7 @@ OneApp/
 - Python 3.13 preferred; Python 3.11+ should work.
 - Node 20+ for Tailwind and vendored frontend libraries.
 - SQLite is the default database. Set `DATABASE_URL` for Postgres.
+- Docker only if you want to build or run the deployment image locally.
 
 ## Setup
 
@@ -236,13 +238,123 @@ npm run build
 settings are active; production should run with `DJANGO_DEBUG=False` and secure
 cookie/SSL settings enabled.
 
+## Deployment
+
+The deployed app runs on free tiers, in three parts:
+
+| Part | Where | Why |
+|---|---|---|
+| Web app | Render free web service, built from `Dockerfile` | Deploys on push; no card needed |
+| Database | Neon free Postgres | A free host gives no persistent disk, so SQLite would be wiped on every deploy |
+| Scheduled refresh | GitHub Actions, `.github/workflows/refresh-data.yml` | Render's own cron is a paid feature, and the free web service sleeps |
+
+Two consequences worth knowing before relying on it:
+
+- The web service sleeps after about 15 minutes with no traffic, so the first
+  visit afterwards takes roughly 30-60 seconds to answer. Visits after that are
+  normal speed.
+- The refresh does not depend on the web service being awake. It runs on
+  GitHub's runners and writes to the same database.
+
+### First deployment
+
+1. **Create the database.** Make a Neon project and copy its pooled connection
+   string. It looks like
+   `postgres://user:password@host/dbname?sslmode=require`.
+
+2. **Move the existing data across.** From a checkout with the local SQLite
+   database, dump everything except the tables Django rebuilds by itself:
+
+   ```powershell
+   .\.venv\Scripts\python.exe manage.py dumpdata `
+     --natural-foreign --natural-primary `
+     --exclude contenttypes --exclude auth.permission --exclude sessions `
+     --indent 2 --output transfer.json
+   ```
+
+   Then point at Neon and load it:
+
+   ```powershell
+   $env:DATABASE_URL = "postgres://user:password@host/dbname?sslmode=require"
+   .\.venv\Scripts\python.exe manage.py migrate
+   .\.venv\Scripts\python.exe manage.py loaddata transfer.json
+   Remove-Item transfer.json
+   Remove-Item Env:\DATABASE_URL
+   ```
+
+   The dump includes the user accounts, so the same login works on the
+   deployed app. Delete `transfer.json` afterwards - it is a copy of the whole
+   database and belongs nowhere near the repository.
+
+3. **Create the web service.** In Render, create a Blueprint from this
+   repository. `render.yaml` describes the service; the only value Render will
+   ask for is `DATABASE_URL`, because it is deliberately not in the file.
+
+4. **Give the workflow its secrets.** In the GitHub repository settings, under
+   Secrets and variables > Actions, add:
+
+   | Secret | Value |
+   |---|---|
+   | `DATABASE_URL` | The same Neon connection string |
+   | `DJANGO_SECRET_KEY` | Any random value; the refresh signs nothing |
+
+5. **Check it.** Open the Render URL, log in, and run the workflow once by hand
+   from the Actions tab (`Refresh data` > `Run workflow`) rather than waiting
+   for the schedule.
+
+### The scheduled refresh
+
+`refresh-data.yml` runs `manage.py refresh_all --due-only --strict` twice a day,
+at 07:00 and 19:00 Manila time. `--due-only` means a source that is still
+current costs nothing, and `--strict` makes a failed source fail the run, so
+GitHub emails about a feed that has gone quiet instead of the data silently
+ageing. The overview screen shows the same staleness from the other side.
+
+Places are not in the routine refresh. Re-import them by hand every few months
+with `refresh_all --only places_osm`, locally or through the workflow's manual
+run.
+
+GitHub disables scheduled workflows in a repository with no activity for 60
+days. A commit, or one manual run, resets that.
+
+### Configuration in production
+
+Everything comes from the environment. Beyond the values in `.env.example`:
+
+| Variable | Set to | Effect |
+|---|---|---|
+| `DJANGO_DEBUG` | `False` | Required off anywhere real |
+| `DATABASE_URL` | The Neon string | Postgres instead of the local SQLite file |
+| `DJANGO_STATIC_MANIFEST` | `True` | Hashed static filenames; the image runs `collectstatic` at build time |
+| `DJANGO_SECURE_SSL_REDIRECT` | `True` | Redirect plain HTTP |
+| `DJANGO_TRUST_PROXY_SSL_HEADER` | `True` | Read the original scheme from `X-Forwarded-Proto`. Only correct behind a TLS-terminating proxy - without one, a client can claim HTTPS |
+
+`RENDER_EXTERNAL_HOSTNAME` is set by the platform, and settings add it to
+`ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`, so a rename does not need an edit.
+
+### Running the container locally
+
+```powershell
+docker build -t oneapp .
+docker run --rm -p 8000:8000 `
+  -e DJANGO_SECRET_KEY=local-container-key `
+  -e DATABASE_URL="postgres://user:password@host/dbname?sslmode=require" `
+  oneapp
+```
+
 ## Operational Routine
+
+Steps 1 to 4 happen on their own where the app is deployed - see
+[Deployment](#deployment). Run them by hand locally, or when a source needs
+catching up:
 
 1. Weekly, enter or import the DOE advisory for NCR.
 2. Refresh GasWatch and MetroFuel so the Metro Manila regional and brand baselines stay current.
 3. On weekdays, import the DA NCR commodity index.
 4. Weekly, refresh bank card promos.
-5. Every few months, refresh Metro Manila places from OpenStreetMap.
+5. Every few months, refresh Metro Manila places from OpenStreetMap. This one is
+   never automatic: the import is hundreds of queries against public Overpass
+   instances that rate-limit hard.
 
 ## Design And Data Boundaries
 

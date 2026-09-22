@@ -1,0 +1,43 @@
+# The scheduled refresh runs here rather than on the web host: the free web
+# service sleeps when nobody is using it, and scheduled jobs on that platform
+# are a paid feature. This talks to the same database the app reads.
+name: Refresh data
+
+on:
+  schedule:
+    # 07:00 and 19:00 Manila (UTC+8). The DA publishes its index late in the
+    # working day, so the evening run usually catches it a day earlier than a
+    # morning-only schedule would.
+    - cron: "0 23 * * *"
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # SQLite is not in play here, but two importers writing the same rows at once
+  # still has no useful meaning. A run in progress wins.
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Refresh due sources
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "False"
+        # --strict so a source that fails turns the run red and GitHub mails
+        # about it. Without it a feed could be down for weeks unnoticed.
+        run: python manage.py refresh_all --due-only --strict

@@ -19,3 +19,8 @@ pdfplumber==0.11.10
 # HTML rather than JSON, and their markup is the sort real sites have - unclosed
 # tags, dates inside comments - which a stack of regexes handles badly.
 beautifulsoup4==4.14.2
+
+# Serving. Gunicorn runs the WSGI app in the container; psycopg talks to the
+# managed Postgres the deployment uses in place of the local SQLite file.
+gunicorn==23.0.0
+psycopg[binary]==3.2.10

@@ -17,7 +17,7 @@ import io
 import time
 
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.freshness import BY_KEY, SOURCES
 from apps.core.models import SourceRun
@@ -48,6 +48,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--due-only", action="store_true",
             help="Skip anything already current. Useful on a frequent timer.",
+        )
+        parser.add_argument(
+            "--strict", action="store_true",
+            help="Exit non-zero if any source failed. For a scheduler that "
+                 "only tells you about a run when it comes back unhappy.",
         )
 
     def handle(self, *args, **options):
@@ -119,6 +124,8 @@ class Command(BaseCommand):
                 "limiting, not the app. The old data is untouched and still "
                 "labelled with its own date."
             )
+            if options["strict"]:
+                raise CommandError(f"{failed} source(s) failed")
 
     def _summarise(self, output: str) -> str:
         """The last meaningful line an importer printed."""

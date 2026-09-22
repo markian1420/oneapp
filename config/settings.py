@@ -30,6 +30,13 @@ DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
 
+# Render names the service's host at runtime. Reading it here means a first
+# deploy, or a rename, does not arrive as a DisallowedHost page.
+_platform_host = env("RENDER_EXTERNAL_HOSTNAME", default="")
+if _platform_host:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, _platform_host]
+    CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, f"https://{_platform_host}"]
+
 # --------------------------------------------------------------------------
 # Applications
 # --------------------------------------------------------------------------
@@ -98,6 +105,14 @@ _SQLITE_URL = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
 # database". django-environ would otherwise parse the empty string into the
 # dummy backend, and every query then fails with a confusing ENGINE error.
 DATABASES = {"default": env.db_url_config(env("DATABASE_URL", default="") or _SQLITE_URL)}
+
+# A managed Postgres sits across a network hop and the free tier suspends
+# between refreshes, so every cold request would otherwise pay for a fresh
+# connection and TLS handshake. Holding one open for ten minutes removes that;
+# the health check discards a connection the server closed while we were idle.
+if DATABASES["default"]["ENGINE"] != "django.db.backends.sqlite3":
+    DATABASES["default"]["CONN_MAX_AGE"] = env.int("DJANGO_CONN_MAX_AGE", default=600)
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -170,6 +185,12 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
+
+# Behind a TLS-terminating proxy the app only learns the original scheme from
+# a header, and without this the redirect above loops forever. Off by default:
+# trusting the header when nothing sets it lets a client claim HTTPS.
+if env.bool("DJANGO_TRUST_PROXY_SSL_HEADER", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
