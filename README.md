@@ -138,21 +138,27 @@ Configuration lives in `.env`; `.env.example` documents the local defaults.
 | `OVERPASS_TIMEOUT` | `180` | Overpass request timeout in seconds |
 | `PRICE_FRESH_DAYS` | `14` | Freshness window for first-hand station prices |
 | `MAP_MAX_STATIONS` | `300` | Maximum fuel station markers returned for one viewport; grocery caps lower in the view |
-| `MAP_TILE_URL` | OpenStreetMap raster tiles | Browser basemap tile URL |
-| `MAP_TILE_ATTRIBUTION` | OpenStreetMap credit | Attribution shown on Leaflet maps |
+| `MAP_TILE_URL` | Esri World Street Map tiles | Browser basemap tile URL |
+| `MAP_TILE_ATTRIBUTION` | Esri and contributor credit | Attribution shown on Leaflet maps |
 | `MAP_TILE_MAX_ZOOM` | `19` | Maximum zoom for the configured tile provider |
 
-The default tile provider is OSM's own server:
+The default tile provider is Esri, which serves without a key:
 
 ```text
-https://tile.openstreetmap.org/{z}/{x}/{y}.png
+https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}
 ```
 
-It serves without a key, which CARTO's hosted basemap - the previous default -
-no longer does: it now stamps "API key required" across every tile. An app of
-this size sits inside the OSM Foundation's tile usage policy; a busier one is
-expected to move to a provider it pays, which is a change of `MAP_TILE_URL` and
-nothing else. Keep the attribution visible whichever provider is in use.
+Note the `{z}/{y}/{x}` order, which is Esri's rather than the `{z}/{x}/{y}` most
+providers use. The two obvious alternatives were tried and rejected:
+
+| Provider | Why not the default |
+|---|---|
+| CARTO Positron | Stamps "API key required" diagonally across every tile served without a key |
+| OSM Foundation | Answers 403 to whole networks under its tile usage policy; a corporate proxy's shared egress is exactly the kind of address it refuses, and the browser cannot identify itself out of that |
+
+Either works with an account: put the key in `MAP_TILE_URL`, which is why the
+tile provider is configuration rather than a constant. Keep the attribution
+visible whichever provider is in use.
 
 ## Running Locally
 
@@ -405,11 +411,15 @@ catching up:
 
 **The map controls appear but the basemap is blank, watermarked, or returns
 403.** The tile provider is blocked, unreachable, or wants a key it has not been
-given - CARTO, the previous default, now stamps "API key required" across every
-tile it serves without one. The default is OSM's own server, which needs no key.
-Point `MAP_TILE_URL`, `MAP_TILE_ATTRIBUTION`, and `MAP_TILE_MAX_ZOOM` at any
-other Leaflet-compatible raster XYZ provider, key included in the URL if it
-wants one.
+given. Which of the three it is matters, because only one of them is about this
+app: a watermark means the provider wants a key; a 403 usually means the
+provider has blocked the network the *browser* comes out of, not the server -
+an office proxy's shared egress address collects blocks from other people's
+traffic, and no header the app sends changes that. Point `MAP_TILE_URL`,
+`MAP_TILE_ATTRIBUTION`, and `MAP_TILE_MAX_ZOOM` at another Leaflet-compatible
+raster XYZ provider, key included in the URL if it wants one. Check a provider
+by opening one of its tile URLs directly in the browser that has the problem;
+that separates a blocked network from a broken setting in about ten seconds.
 
 **The grocery map has stores but no item prices.** That is expected until there
 are recorded basket lines for that item at those stores. The DA NCR price is a

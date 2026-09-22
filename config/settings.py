@@ -236,18 +236,26 @@ PRICE_FRESH_DAYS = env.int("PRICE_FRESH_DAYS", default=14)
 # never receives the whole table; it asks for the box it is looking at.
 MAP_MAX_STATIONS = env.int("MAP_MAX_STATIONS", default=300)
 
-# OSM's own tile server, which serves without a key. CARTO's hosted basemap was
-# the default until it began stamping "API key required" across every tile; the
-# OSM Foundation's usage policy covers an app this size, and a busier one is
-# expected to move to a provider it pays. Both are swappable from the
-# environment, which is what a keyed provider would need.
+# Esri's basemap, which serves without a key and does not mind who is asking.
+# The two obvious alternatives both fail here: CARTO stamps "API key required"
+# across every tile it serves unkeyed, and the OSM Foundation's own server
+# refuses whole networks under its tile policy - a corporate proxy's shared
+# egress is exactly the kind of address it blocks, and the app cannot talk its
+# way out of that from the browser. Note the {z}/{y}/{x} order, which is Esri's
+# rather than Leaflet's usual. A keyed provider is a change of this one value.
 MAP_TILE_URL = env(
     "MAP_TILE_URL",
-    default="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    default=(
+        "https://server.arcgisonline.com/ArcGIS/rest/services"
+        "/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+    ),
 )
 MAP_TILE_ATTRIBUTION = env(
     "MAP_TILE_ATTRIBUTION",
-    default="&copy; OpenStreetMap contributors",
+    default=(
+        "Tiles &copy; Esri &mdash; Esri, TomTom, Garmin, FAO, NOAA, USGS, "
+        "&copy; OpenStreetMap contributors"
+    ),
 )
 MAP_TILE_MAX_ZOOM = env("MAP_TILE_MAX_ZOOM")
 
