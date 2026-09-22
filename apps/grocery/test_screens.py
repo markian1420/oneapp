@@ -12,8 +12,12 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+
+from apps.core.categories import SpendCategory
+from apps.places.models import Place, PlaceKind
+from apps.spend.models import Purchase, PurchaseItem
 
 from .chart import build as build_chart
 from .models import Commodity, CommodityCategory, CommodityPrice
@@ -26,6 +30,35 @@ def make_series(commodity, points, *, region="NCR"):
             commodity=commodity, region=region,
             observed_on=observed_on, price=Decimal(price),
         )
+
+
+def make_store(**overrides) -> Place:
+    values = {
+        "kind": PlaceKind.SUPERMARKET,
+        "osm_type": Place.OSMType.NODE,
+        "osm_id": 9000,
+        "name": "Puregold",
+        "brand": "Puregold",
+        "latitude": Decimal("14.580000"),
+        "longitude": Decimal("121.060000"),
+        "region": "NCR",
+    }
+    values.update(overrides)
+    return Place.objects.create(**values)
+
+
+def log_item(store: Place, description: str, unit_price: str) -> None:
+    purchase = Purchase.objects.create(
+        category=SpendCategory.GROCERY,
+        place=store,
+        total=Decimal(unit_price),
+    )
+    PurchaseItem.objects.create(
+        purchase=purchase,
+        description=description,
+        amount=Decimal(unit_price),
+        unit_price=Decimal(unit_price),
+    )
 
 
 class MovementTests(TestCase):
@@ -180,6 +213,19 @@ class GroceryScreenTests(TestCase):
         self.assertEqual(
             self.client.get(reverse("grocery:commodities")).status_code, 200
         )
+        self.assertEqual(self.client.get(reverse("grocery:map")).status_code, 200)
+
+    @override_settings(
+        MAP_TILE_URL="https://tiles.example.test/{z}/{x}/{y}.png",
+        MAP_TILE_ATTRIBUTION="Example tiles",
+        MAP_TILE_MAX_ZOOM=17,
+    )
+    def test_the_map_uses_the_configured_tile_provider(self):
+        response = self.client.get(reverse("grocery:map"))
+
+        self.assertContains(response, "https://tiles.example.test/{z}/{x}/{y}.png")
+        self.assertContains(response, "Example tiles")
+        self.assertContains(response, "maxZoom: 17")
 
     def test_the_screens_render_with_a_series(self):
         commodity = Commodity.objects.create(
@@ -236,6 +282,81 @@ class GroceryScreenTests(TestCase):
 
     def test_signed_out_users_reach_nothing(self):
         self.client.logout()
-        response = self.client.get(reverse("grocery:commodities"))
+        for name in ("grocery:commodities", "grocery:map"):
+            with self.subTest(screen=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/login/", response["Location"])
+
+
+class GroceryMapEndpointTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("shopper", password="not-a-real-password")
+        self.client.force_login(self.user)
+        self.url = reverse("grocery:stores_json")
+        self.box = {"south": 14.5, "west": 121.0, "north": 14.7, "east": 121.2}
+
+    def test_only_supermarkets_in_the_box_are_returned(self):
+        make_store(name="Puregold", brand="Puregold", osm_id=1)
+        make_store(
+            kind=PlaceKind.CONVENIENCE, name="7-Eleven", brand="7-Eleven", osm_id=2
+        )
+        make_store(
+            name="Outside", brand="Puregold", osm_id=3,
+            latitude=Decimal("10.300000"), longitude=Decimal("123.900000"),
+        )
+
+        payload = self.client.get(self.url, self.box).json()
+
+        self.assertEqual([store["name"] for store in payload["stores"]], ["Puregold"])
+
+    def test_store_group_filters_to_the_requested_chains(self):
+        make_store(name="SM Hypermarket", brand="SM Hypermarket", osm_id=1)
+        make_store(name="Puregold", brand="Puregold", osm_id=2)
+        make_store(name="Robinsons Easymart", brand="Robinsons Easymart", osm_id=3)
+
+        payload = self.client.get(
+            self.url, {**self.box, "store_group": "robinsons"}
+        ).json()
+
+        self.assertEqual([store["brand"] for store in payload["stores"]], ["Robinsons Easymart"])
+
+    def test_known_item_prices_sort_cheapest_first(self):
+        puregold = make_store(name="Puregold", brand="Puregold", osm_id=1)
+        robinsons = make_store(
+            name="Robinsons Supermarket", brand="Robinsons Supermarket", osm_id=2,
+            latitude=Decimal("14.581000"), longitude=Decimal("121.061000"),
+        )
+        log_item(puregold, "Chicken breast", "210.00")
+        log_item(robinsons, "Chicken breast", "190.00")
+
+        payload = self.client.get(
+            self.url, {**self.box, "item": "chicken"}
+        ).json()["stores"]
+
+        self.assertEqual(payload[0]["brand"], "Robinsons Supermarket")
+        self.assertEqual(payload[0]["difference_vs_best"], "0.00")
+        self.assertEqual(payload[1]["difference_vs_best"], "20.00")
+
+    def test_da_reference_is_returned_when_the_item_is_tracked(self):
+        chicken = Commodity.objects.create(
+            category=CommodityCategory.POULTRY,
+            name="Chicken Breast",
+            unit="kg",
+        )
+        make_series(chicken, [(date(2026, 8, 17), "220.00")])
+        make_store(name="Puregold", brand="Puregold", osm_id=1)
+
+        payload = self.client.get(self.url, {**self.box, "item": "chicken"}).json()
+
+        self.assertEqual(payload["reference"]["commodity"], "Chicken Breast")
+        self.assertEqual(payload["reference"]["price"], "220.00")
+
+    def test_missing_bounding_box_is_bad_request(self):
+        self.assertEqual(self.client.get(self.url).status_code, 400)
+
+    def test_signed_out_callers_are_redirected(self):
+        self.client.logout()
+        response = self.client.get(self.url, self.box)
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response["Location"])

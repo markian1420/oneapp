@@ -40,7 +40,7 @@ class PriceTier(models.TextChoices):
 
     LOGGED = "logged", "You paid this"
     ADVISORY = "advisory", "DOE weekly advisory"
-    ESTIMATED = "estimated", "Estimated"
+    ESTIMATED = "estimated", "Regional price"
     UNKNOWN = "unknown", "No price"
 
 

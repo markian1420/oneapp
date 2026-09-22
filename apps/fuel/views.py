@@ -1,10 +1,10 @@
 """
 Fuel module screens.
 
-Everything that reads a list does it server-side: the browser gets one page of
-rows, or the stations inside the box it is currently looking at, and never the
-table. That is partly speed, but mostly that a client-side filter is not a
-filter - it is a full copy of the data with some of it hidden.
+Everything the map reads is bounded on the server: the browser gets only the
+stations inside the box it is currently looking at, never a full station table.
+That is partly speed, but mostly that a client-side filter is not a filter - it
+is a full copy of the data with some of it hidden.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Count, Max, Min, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -22,12 +21,13 @@ from django.views.decorators.http import require_POST
 from apps.core.tables import Column, build_table
 from apps.core.views import module
 
-from .forms import AdvisoryEntryForm, FillUpForm, PriceReportForm, VehicleForm
 from apps.places.models import Place, PlaceKind
 from apps.places.regions import REGION_NAMES
 
-from .models import DOEAdvisory, FillUp, FuelType, PriceObservation, Vehicle
-from .services import fuel_economy, quotes_for, score_options, week_start
+from .forms import AdvisoryEntryForm, PriceReportForm
+from .models import DOEAdvisory, FuelType, PriceObservation, Vehicle
+from .services import quotes_for, score_options, week_start
+
 
 def fuel_places():
     """Places of kind fuel.
@@ -39,9 +39,9 @@ def fuel_places():
     return Place.objects.filter(kind=PlaceKind.FUEL)
 
 
-# Metro Manila. Only used the first time, before there is a fill-up to centre on.
+# Metro Manila. The app opens on the whole metro area first.
 DEFAULT_CENTER = (14.5995, 120.9842)
-DEFAULT_ZOOM = 12
+DEFAULT_ZOOM = 11
 
 
 def _fuel_choice(request, default: str = "") -> str:
@@ -108,14 +108,6 @@ def station_map(request):
     fuel = _fuel_choice(request)
     vehicle = Vehicle.objects.filter(is_default=True).first() or Vehicle.objects.first()
 
-    last_fill_up = (
-        FillUp.objects.select_related("place").order_by("-filled_at").first()
-    )
-    if last_fill_up:
-        center = (float(last_fill_up.place.latitude), float(last_fill_up.place.longitude))
-    else:
-        center = DEFAULT_CENTER
-
     context = {
         "fuel": fuel,
         "fuel_choices": FuelType.choices,
@@ -126,10 +118,13 @@ def station_map(request):
             .order_by("brand")
             .distinct()
         ),
-        "center_lat": center[0],
-        "center_lng": center[1],
+        "center_lat": DEFAULT_CENTER[0],
+        "center_lng": DEFAULT_CENTER[1],
         "zoom": DEFAULT_ZOOM,
         "max_stations": settings.MAP_MAX_STATIONS,
+        "tile_url": settings.MAP_TILE_URL,
+        "tile_attribution": settings.MAP_TILE_ATTRIBUTION,
+        "tile_max_zoom": settings.MAP_TILE_MAX_ZOOM,
         "default_liters": (
             vehicle.tank_capacity_l if vehicle else Decimal("40")
         ),
@@ -189,6 +184,10 @@ def stations_json(request):
     options = score_options(
         stations, fuel, liters=liters, km_per_liter=km_per_liter, origin=origin
     )
+    comparable_costs = [
+        option.effective_cost for option in options if option.effective_cost is not None
+    ]
+    best_cost = min(comparable_costs) if comparable_costs else None
 
     return JsonResponse({
         "total": total,
@@ -218,6 +217,11 @@ def stations_json(request):
                     str(option.saving_vs_worst)
                     if option.saving_vs_worst is not None else None
                 ),
+                "difference_vs_best": (
+                    str(option.effective_cost - best_cost)
+                    if option.effective_cost is not None and best_cost is not None
+                    else None
+                ),
                 "url": f"/fuel/stations/{option.place.pk}/",
             }
             for option in options
@@ -226,83 +230,7 @@ def stations_json(request):
 
 
 @login_required
-@module("fuel_stations", "Stations")
-def stations(request):
-    fuel = _fuel_choice(request)
-    search = request.GET.get("q", "").strip()
-    brand = request.GET.get("brand", "")
-    region = request.GET.get("region", "")
-
-    queryset = fuel_places()
-    if search:
-        queryset = queryset.filter(
-            Q(name__icontains=search)
-            | Q(brand__icontains=search)
-            | Q(city__icontains=search)
-            | Q(street__icontains=search)
-        )
-    if brand:
-        queryset = queryset.filter(brand=brand)
-    if region:
-        queryset = queryset.filter(region=region)
-    if request.GET.get("favorites") == "1":
-        queryset = queryset.filter(is_favorite=True)
-
-    columns = [
-        Column("name", "Station", order_by=("name",)),
-        Column("brand", "Brand", order_by=("brand",)),
-        Column("city", "Location", order_by=("city", "province")),
-        Column("region", "Region", order_by=("region",)),
-        Column("price", "Price", align="right",
-               note="Resolved from your logs and the DOE advisory, so not sortable in SQL."),
-        Column("fills", "Fill-ups", order_by=("fill_up_count",), align="right"),
-    ]
-
-    table = build_table(
-        request,
-        queryset.annotate(fill_up_count=Count("fill_ups")),
-        columns,
-        default_sort="name",
-        preserve=("q", "brand", "region", "favorites", "fuel"),
-    )
-    page_stations = list(table.page.object_list)
-
-    # Priced one page at a time: the resolver runs two queries for the rows on
-    # screen rather than for every station in the country. The quote is hung on
-    # each station because a Django template cannot look a dict up by a
-    # variable key without a custom filter, and one attribute is plainer than
-    # a filter that exists to work around the template language.
-    quotes = quotes_for(page_stations, fuel)
-    for station in page_stations:
-        station.quote = quotes[station.pk]
-
-    context = {
-        "table": table,
-        "stations": page_stations,
-        "q": search,
-        "fuel": fuel,
-        "fuel_choices": FuelType.choices,
-        "brand": brand,
-        "region": region,
-        "regions": REGION_NAMES,
-        "brands": (
-            fuel_places().exclude(brand="")
-            .values_list("brand", flat=True).order_by("brand").distinct()
-        ),
-        "favorites_only": request.GET.get("favorites") == "1",
-        "coverage": price_coverage(),
-    }
-
-    # htmx asks for the rows alone; a browser, a bookmark or a crawler asks for
-    # the page. Same view, same queryset, so the two can never disagree about
-    # what the filters mean.
-    if request.headers.get("HX-Request"):
-        return render(request, "fuel/_station_results.html", context)
-    return render(request, "fuel/stations.html", context)
-
-
-@login_required
-@module("fuel_stations", "Station")
+@module("fuel_map", "Station")
 def station_detail(request, pk: int):
     station = get_object_or_404(Place, pk=pk, kind=PlaceKind.FUEL)
     fuel = _fuel_choice(request)
@@ -320,12 +248,6 @@ def station_detail(request, pk: int):
     history = (
         station.fuel_observations.filter(fuel_type=fuel).order_by("-observed_at")[:30]
     )
-    fill_ups = station.fill_ups.select_related("vehicle").order_by("-filled_at")[:10]
-    spend = station.fill_ups.aggregate(
-        total=Sum("total_cost"), visits=Count("id"),
-        cheapest=Min("price_per_liter"), dearest=Max("price_per_liter"),
-        average=Avg("price_per_liter"),
-    )
 
     context = {
         "station": station,
@@ -341,8 +263,6 @@ def station_detail(request, pk: int):
             for choice in FuelType
         ],
         "history": history,
-        "fill_ups": fill_ups,
-        "spend": spend,
         "form": form,
     }
     return render(request, "fuel/station_detail.html", context)
@@ -365,123 +285,6 @@ def station_favorite(request, pk: int):
     if next_url.startswith("/") and not next_url.startswith("//"):
         return redirect(next_url)
     return redirect("fuel:station_detail", pk=station.pk)
-
-
-@login_required
-@module("fuel_fillups", "Fill-ups")
-def fill_ups(request):
-    queryset = FillUp.objects.select_related("place", "vehicle")
-
-    vehicle = request.GET.get("vehicle", "")
-    if vehicle.isdigit():
-        queryset = queryset.filter(vehicle_id=int(vehicle))
-
-    columns = [
-        Column("filled_at", "When", order_by=("filled_at",)),
-        Column("station", "Station", order_by=("place__name",)),
-        Column("fuel_type", "Grade", order_by=("fuel_type",)),
-        Column("liters", "Litres", order_by=("liters",), align="right"),
-        Column("price", "Per litre", order_by=("price_per_liter",), align="right"),
-        Column("total", "Total", order_by=("total_cost",), align="right"),
-        Column("odometer", "Odometer", order_by=("odometer_km",), align="right"),
-        Column("actions", "", align="right"),
-    ]
-    table = build_table(
-        request, queryset, columns,
-        default_sort="filled_at", default_desc=True, preserve=("vehicle",),
-    )
-
-    totals = queryset.aggregate(
-        spend=Sum("total_cost"), liters=Sum("liters"), average=Avg("price_per_liter")
-    )
-
-    context = {
-        "table": table,
-        "fill_ups": table.page.object_list,
-        "totals": totals,
-        "vehicles": Vehicle.objects.all(),
-        "vehicle_filter": vehicle,
-        "economy": fuel_economy(list(queryset.order_by("-filled_at")[:20])),
-    }
-    return render(request, "fuel/fill_ups.html", context)
-
-
-@login_required
-@module("fuel_fillups", "Log a fill-up")
-def fill_up_create(request):
-    if not Vehicle.objects.exists():
-        messages.warning(request, "Add a vehicle first - a fill-up belongs to one.")
-        return redirect("fuel:vehicle_create")
-    if not fuel_places().exists():
-        messages.warning(
-            request,
-            "No stations imported yet. Run: "
-            "python manage.py import_places --area NCR --kind fuel",
-        )
-        return redirect("fuel:stations")
-
-    initial_place = request.GET.get("place")
-    if request.method == "POST":
-        form = FillUpForm(request.POST)
-        if form.is_valid():
-            fill_up = form.save()
-            messages.success(
-                request,
-                f"Logged {fill_up.liters} L at {fill_up.price_per_liter}/L. "
-                "That price is now on the map.",
-            )
-            return redirect("fuel:fillups")
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = FillUpForm(
-            initial={"place": initial_place} if initial_place else None
-        )
-
-    return render(
-        request,
-        "fuel/fill_up_form.html",
-        {"form": form, "creating": True, "fresh_days": settings.PRICE_FRESH_DAYS},
-    )
-
-
-@login_required
-@module("fuel_fillups", "Edit fill-up")
-def fill_up_edit(request, pk: int):
-    fill_up = get_object_or_404(FillUp, pk=pk)
-    if request.method == "POST":
-        form = FillUpForm(request.POST, instance=fill_up)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Fill-up updated.")
-            return redirect("fuel:fillups")
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = FillUpForm(instance=fill_up)
-
-    return render(
-        request,
-        "fuel/fill_up_form.html",
-        {
-            "form": form,
-            "creating": False,
-            "fill_up": fill_up,
-            "fresh_days": settings.PRICE_FRESH_DAYS,
-        },
-    )
-
-
-@login_required
-@require_POST
-def fill_up_delete(request, pk: int):
-    fill_up = get_object_or_404(FillUp, pk=pk)
-    observation = fill_up.observation
-    fill_up.delete()
-    # The price came from this receipt, so it goes with it rather than
-    # lingering as a number with nothing behind it.
-    if observation:
-        observation.delete()
-    messages.success(request, "Fill-up deleted.")
-    return redirect("fuel:fillups")
 
 
 @login_required
@@ -533,57 +336,3 @@ def advisory(request):
         ),
     }
     return render(request, "fuel/advisory.html", context)
-
-
-@login_required
-@module("fuel_vehicles", "Vehicles")
-def vehicles(request):
-    context = {
-        "vehicles": Vehicle.objects.annotate(
-            fill_up_count=Count("fill_ups"), spend=Sum("fill_ups__total_cost")
-        ),
-        "economy_by_vehicle": {
-            vehicle.pk: fuel_economy(list(vehicle.fill_ups.all()))
-            for vehicle in Vehicle.objects.prefetch_related("fill_ups")
-        },
-    }
-    return render(request, "fuel/vehicles.html", context)
-
-
-@login_required
-@module("fuel_vehicles", "Add vehicle")
-def vehicle_create(request):
-    if request.method == "POST":
-        form = VehicleForm(request.POST)
-        if form.is_valid():
-            # The first vehicle is the default one; there is nothing to choose
-            # between yet and an app with no default vehicle prices nothing.
-            vehicle = form.save(commit=False)
-            if not Vehicle.objects.exists():
-                vehicle.is_default = True
-            vehicle.save()
-            messages.success(request, f"{vehicle.name} added.")
-            return redirect("fuel:vehicles")
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = VehicleForm()
-    return render(request, "fuel/vehicle_form.html", {"form": form, "creating": True})
-
-
-@login_required
-@module("fuel_vehicles", "Edit vehicle")
-def vehicle_edit(request, pk: int):
-    vehicle = get_object_or_404(Vehicle, pk=pk)
-    if request.method == "POST":
-        form = VehicleForm(request.POST, instance=vehicle)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"{vehicle.name} updated.")
-            return redirect("fuel:vehicles")
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = VehicleForm(instance=vehicle)
-    return render(
-        request, "fuel/vehicle_form.html",
-        {"form": form, "creating": False, "vehicle": vehicle},
-    )

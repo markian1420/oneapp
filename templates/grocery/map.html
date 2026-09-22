@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+{% endblock %}
+
+{% block subtitle %}
+  <p class="truncate text-[13px] text-ink-muted dark:text-slate-400">
+    {{ store_count|intcomma }} supermarkets imported for Metro Manila{% if latest_day %} &middot; DA prices through {{ latest_day|date:"d M Y" }}{% endif %}
+  </p>
+{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" id="locate" class="btn-primary btn-sm">
+    {% include "partials/_icon.html" with name="locate" class="h-4 w-4" %}
+    <span class="hidden sm:inline">Use my location</span>
+  </button>
+{% endblock %}
+
+{% block content %}
+{% if not store_count %}
+  <div class="panel panel-pad mb-5 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+    <p class="text-sm font-bold text-amber-900 dark:text-amber-200">No supermarkets imported yet.</p>
+    <p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
+      Pull them from OpenStreetMap with
+      <code class="kbd">python manage.py import_places --area NCR --kind supermarket</code>.
+    </p>
+  </div>
+{% endif %}
+
+<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
+  <section class="min-w-0 space-y-4">
+    <form class="panel panel-pad grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <label class="min-w-0">
+        <span class="form-label">Item</span>
+        <input id="item" type="search" value="{{ item }}" class="form-control" placeholder="Chicken, rice, pork, bangus">
+      </label>
+
+      <label class="min-w-0">
+        <span class="form-label">Store group</span>
+        <select id="store_group" class="form-control">
+          <option value="">All supermarkets</option>
+          {% for value, label in store_groups %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="min-w-0">
+        <span class="form-label">Store search</span>
+        <input id="store" type="search" class="form-control" placeholder="Puregold, Robinsons, SM">
+      </label>
+    </form>
+
+    <div id="map" class="map-shell"></div>
+  </section>
+
+  <aside class="min-w-0 space-y-4">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="min-w-0">
+          <p class="eyebrow">Best options</p>
+          <p id="scope" class="truncate text-sm font-bold text-ink dark:text-white">Use location or pan the map</p>
+        </div>
+      </div>
+      <div id="reference" class="hidden border-b border-line px-4 py-3 text-[12px] text-ink-soft dark:border-white/10 dark:text-slate-300"></div>
+      <div id="stores" class="panel-pad max-h-[58vh] space-y-2 overflow-y-auto scroll-slim">
+        <p class="text-sm text-ink-muted dark:text-slate-400">Loading supermarkets...</p>
+      </div>
+    </div>
+
+    <div class="panel panel-pad">
+      <p class="eyebrow">Known prices</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
+        Store prices come from recorded basket lines. When no store has that item yet,
+        the map stays nearest-first and shows the DA NCR benchmark when available.
+      </p>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+<script>
+(function () {
+  var map = L.map('map', { preferCanvas: true })
+             .setView([{{ center_lat }}, {{ center_lng }}], {{ zoom }});
+  L.tileLayer('{{ tile_url|escapejs }}', {
+    maxZoom: {{ tile_max_zoom }},
+    attribution: '{{ tile_attribution|escapejs }}'
+  }).addTo(map);
+
+  var layer = L.layerGroup().addTo(map);
+  var storesEl = document.getElementById('stores');
+  var scopeEl = document.getElementById('scope');
+  var referenceEl = document.getElementById('reference');
+  var pending = null;
+  var debounce = null;
+  var origin = null;
+  var originMarker = null;
+
+  var peso = new Intl.NumberFormat('en-PH', {
+    style: 'currency', currency: 'PHP', maximumFractionDigits: 2
+  });
+
+  function escapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : value;
+    return div.innerHTML;
+  }
+
+  function priceText(store) {
+    return store.price ? peso.format(store.price) : 'No store price';
+  }
+
+  function differenceText(store) {
+    if (!store.difference_vs_best) return '';
+    var diff = Number(store.difference_vs_best);
+    if (diff <= 0) return 'Cheapest known';
+    return '+' + peso.format(diff) + ' vs cheapest';
+  }
+
+  function markerFor(store) {
+    var priced = !!store.price;
+    var marker = L.circleMarker([store.lat, store.lng], {
+      radius: priced ? 8 : 6,
+      color: priced ? '#15803d' : '#0369a1',
+      fillColor: priced ? '#22c55e' : '#38bdf8',
+      fillOpacity: priced ? 0.92 : 0.74,
+      weight: priced ? 3 : 2
+    });
+    marker.bindPopup(
+      '<p class="font-bold text-ink dark:text-white">' + escapeHtml(store.name) + '</p>' +
+      (store.city ? '<p class="text-xs text-ink-muted dark:text-slate-400">' + escapeHtml(store.city) + '</p>' : '') +
+      '<p class="mt-2 text-base font-black text-ink dark:text-white">' + escapeHtml(priceText(store)) + '</p>' +
+      (store.price ? '<p class="text-xs text-ink-muted dark:text-slate-400">from ' + store.visits + ' basket line' + (store.visits === 1 ? '' : 's') + '</p>' : '') +
+      (differenceText(store) ? '<p class="mt-1 text-xs font-bold text-brand-700 dark:text-brand-400">' + escapeHtml(differenceText(store)) + '</p>' : '') +
+      (store.distance_km ? '<p class="mt-1 text-xs text-ink-muted dark:text-slate-400">about ' + store.distance_km + ' km away</p>' : '') +
+      '<p class="mt-2"><a class="font-bold text-brand-700 underline" href="' + store.url + '">Open place</a></p>'
+    );
+    return marker;
+  }
+
+  function storeRow(store, index) {
+    var row = document.createElement('a');
+    row.href = store.url;
+    row.className = 'option-row' + (index === 0 && store.price ? ' option-best' : '');
+    row.innerHTML =
+      '<span class="grid h-7 w-7 shrink-0 place-items-center rounded-full ' +
+        (store.price ? 'bg-brand-100 text-brand-800 dark:bg-brand-500/15 dark:text-brand-200' : 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200') +
+        ' text-xs font-black">' + (index + 1) + '</span>' +
+      '<span class="min-w-0 flex-1">' +
+        '<span class="block truncate text-[13px] font-bold text-ink dark:text-white">' + escapeHtml(store.name) + '</span>' +
+        '<span class="block truncate text-[11px] text-ink-muted dark:text-slate-400">' +
+          escapeHtml((store.brand || 'Supermarket') + (store.city ? ' - ' + store.city : '')) +
+        '</span>' +
+        (differenceText(store) ? '<span class="mt-1 inline-flex text-[11px] font-extrabold text-brand-700 dark:text-brand-400">' + escapeHtml(differenceText(store)) + '</span>' : '') +
+      '</span>' +
+      '<span class="shrink-0 text-right">' +
+        '<span class="block text-sm font-black text-ink dark:text-white">' + escapeHtml(priceText(store)) + '</span>' +
+        (store.distance_km ? '<span class="block text-[11px] font-bold text-ink-muted dark:text-slate-400">' + store.distance_km + ' km</span>' : '') +
+      '</span>';
+    return row;
+  }
+
+  function renderReference(reference) {
+    if (!reference) {
+      referenceEl.classList.add('hidden');
+      referenceEl.innerHTML = '';
+      return;
+    }
+    referenceEl.classList.remove('hidden');
+    referenceEl.innerHTML =
+      '<span class="font-extrabold text-ink dark:text-white">DA NCR benchmark:</span> ' +
+      peso.format(reference.price) + ' per ' + escapeHtml(reference.unit) +
+      '<span class="text-ink-muted dark:text-slate-500"> &middot; ' + escapeHtml(reference.commodity) + '</span>';
+  }
+
+  function render(data) {
+    layer.clearLayers();
+    storesEl.innerHTML = '';
+    renderReference(data.reference);
+
+    if (!data.stores.length) {
+      storesEl.innerHTML = '<p class="text-sm text-ink-muted dark:text-slate-400">No supermarkets in view. Zoom out or clear the filters.</p>';
+      scopeEl.textContent = 'Nothing in view';
+      return;
+    }
+
+    data.stores.forEach(function (store, index) {
+      layer.addLayer(markerFor(store));
+      if (index < 25) storesEl.appendChild(storeRow(store, index));
+    });
+
+    var order = data.sorted_by === 'known_price'
+      ? 'cheapest known first'
+      : data.sorted_by === 'distance'
+        ? 'nearest first'
+        : 'A-Z';
+    scopeEl.textContent = (data.truncated
+      ? 'Showing ' + data.shown + ' of ' + data.total
+      : data.shown + ' supermarket' + (data.shown === 1 ? '' : 's')) + ' - ' + order;
+  }
+
+  function load() {
+    var bounds = map.getBounds();
+    var params = new URLSearchParams({
+      south: bounds.getSouth(),
+      west: bounds.getWest(),
+      north: bounds.getNorth(),
+      east: bounds.getEast(),
+      item: document.getElementById('item').value,
+      store_group: document.getElementById('store_group').value,
+      store: document.getElementById('store').value
+    });
+    var reference = origin || map.getCenter();
+    params.set('lat', reference.lat);
+    params.set('lng', reference.lng);
+
+    if (pending) pending.abort();
+    pending = new AbortController();
+
+    fetch('{% url "grocery:stores_json" %}?' + params.toString(), {
+      signal: pending.signal,
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(render)
+      .catch(function (error) {
+        if (error.name === 'AbortError') return;
+        storesEl.innerHTML = '<p class="text-sm font-semibold text-red-600 dark:text-red-400">Could not load supermarkets. Pan to retry.</p>';
+      });
+  }
+
+  function scheduleLoad() {
+    window.clearTimeout(debounce);
+    debounce = window.setTimeout(load, 220);
+  }
+
+  map.on('moveend', scheduleLoad);
+  ['item', 'store'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', scheduleLoad);
+  });
+  document.getElementById('store_group').addEventListener('change', scheduleLoad);
+
+  document.getElementById('locate').addEventListener('click', function () {
+    if (!navigator.geolocation) {
+      window.alert('This browser will not share a location.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(function (position) {
+      origin = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (originMarker) map.removeLayer(originMarker);
+      originMarker = L.circleMarker([origin.lat, origin.lng], {
+        radius: 8, color: '#15803d', fillColor: '#20a95a', fillOpacity: 0.9, weight: 3
+      }).addTo(map).bindPopup('You are here');
+      map.setView([origin.lat, origin.lng], 15);
+    }, function () {
+      window.alert('Could not get a location. Distances will be measured from the map centre.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  window.setTimeout(function () { map.invalidateSize(); load(); }, 60);
+})();
+</script>
+{% endblock %}

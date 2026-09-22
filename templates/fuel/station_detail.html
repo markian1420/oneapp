@@ -18,10 +18,6 @@
       <span class="hidden sm:inline">{% if station.is_favorite %}Unpin{% else %}Pin{% endif %}</span>
     </button>
   </form>
-  <a href="{% url 'fuel:fillup_create' %}?place={{ station.pk }}" class="btn-primary btn-sm">
-    {% include "partials/_icon.html" with name="plus" class="h-4 w-4" %}
-    Log a fill-up
-  </a>
 {% endblock %}
 
 {% block content %}
@@ -96,45 +92,12 @@
         <div class="panel-pad">
           <p class="text-sm text-ink-muted dark:text-slate-400">
             No {{ fuel }} price recorded here yet. Note the board next time you pass &mdash;
-            it takes ten seconds and it is worth more than any estimate.
+            it takes ten seconds and gives this station its own price.
           </p>
         </div>
       {% endif %}
     </div>
 
-    {% if fill_ups %}
-      <div class="panel">
-        <div class="panel-header">
-          <div class="min-w-0">
-            <p class="eyebrow">Your visits</p>
-            <p class="text-sm font-bold text-ink dark:text-white">Fill-ups at this station</p>
-          </div>
-        </div>
-        <div class="table-wrap rounded-t-none border-0">
-          <table class="table min-w-[520px]">
-            <thead>
-              <tr>
-                <th>When</th><th>Vehicle</th>
-                <th class="text-right">Litres</th>
-                <th class="text-right">Per litre</th>
-                <th class="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for fill_up in fill_ups %}
-                <tr>
-                  <td class="whitespace-nowrap">{{ fill_up.filled_at|date:"d M Y" }}</td>
-                  <td>{{ fill_up.vehicle.name }}</td>
-                  <td class="text-right mono">{{ fill_up.liters|floatformat:2 }}</td>
-                  <td class="text-right mono">{{ fill_up.price_per_liter|floatformat:2 }}</td>
-                  <td class="text-right mono font-bold">&#8369;{{ fill_up.total_cost|floatformat:2|intcomma }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    {% endif %}
   </section>
 
   <aside class="min-w-0 space-y-5">
@@ -158,30 +121,6 @@
         <button type="submit" class="btn-primary w-full">Save price</button>
       </div>
     </form>
-
-    {% if spend.visits %}
-      <div class="panel panel-pad">
-        <p class="eyebrow">Your record here</p>
-        <dl class="mt-3 space-y-2.5">
-          <div class="flex items-baseline justify-between gap-3">
-            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Visits</dt>
-            <dd class="mono font-black text-ink dark:text-white">{{ spend.visits }}</dd>
-          </div>
-          <div class="flex items-baseline justify-between gap-3">
-            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Total spent</dt>
-            <dd class="mono font-black text-ink dark:text-white">&#8369;{{ spend.total|floatformat:2|intcomma }}</dd>
-          </div>
-          <div class="flex items-baseline justify-between gap-3">
-            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Cheapest &#8369;/L</dt>
-            <dd class="mono font-black text-brand-700 dark:text-brand-400">{{ spend.cheapest|floatformat:2 }}</dd>
-          </div>
-          <div class="flex items-baseline justify-between gap-3">
-            <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">Dearest &#8369;/L</dt>
-            <dd class="mono font-black text-ink dark:text-white">{{ spend.dearest|floatformat:2 }}</dd>
-          </div>
-        </dl>
-      </div>
-    {% endif %}
 
     <div class="panel panel-pad">
       <p class="eyebrow">Station</p>

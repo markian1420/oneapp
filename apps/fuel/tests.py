@@ -18,7 +18,7 @@ from unittest import mock
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -406,6 +406,27 @@ class StationMapEndpointTests(TestCase):
             })
         self.assertIn("Outside", response.json()["stations"][0]["name"])
 
+    def test_the_map_reports_the_gap_from_the_best_option(self):
+        expensive = make_station(
+            osm_id=3, name="Expensive",
+            latitude=Decimal("14.590000"), longitude=Decimal("121.070000"),
+        )
+        PriceObservation.objects.create(
+            place=self.inside, fuel_type="gas_95", price=Decimal("70.00")
+        )
+        PriceObservation.objects.create(
+            place=expensive, fuel_type="gas_95", price=Decimal("75.00")
+        )
+
+        response = self.client.get(self.url, {
+            "south": 14.5, "west": 121.0, "north": 14.7, "east": 121.2,
+            "fuel": "gas_95", "liters": "10",
+        })
+        payload = response.json()["stations"]
+
+        self.assertEqual(payload[0]["difference_vs_best"], "0.00")
+        self.assertEqual(payload[1]["difference_vs_best"], "50.00")
+
 
 class StationFavouriteTests(TestCase):
     def setUp(self):
@@ -424,9 +445,9 @@ class StationFavouriteTests(TestCase):
     def test_a_local_next_target_is_honoured(self):
         response = self.client.post(
             reverse("fuel:station_favorite", args=[self.station.pk]),
-            {"next": "/fuel/stations/"},
+            {"next": "/fuel/"},
         )
-        self.assertEqual(response["Location"], "/fuel/stations/")
+        self.assertEqual(response["Location"], "/fuel/")
 
 
 class ScreenSmokeTests(TestCase):
@@ -441,11 +462,22 @@ class ScreenSmokeTests(TestCase):
         self.client.force_login(self.user)
 
     def test_screens_render_when_there_is_no_data(self):
-        for name in ("core:home", "fuel:map", "fuel:stations", "fuel:fillups",
-                     "fuel:advisory", "fuel:vehicles", "fuel:vehicle_create"):
+        for name in ("core:home", "fuel:map", "fuel:advisory"):
             with self.subTest(screen=name):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 200)
+
+    @override_settings(
+        MAP_TILE_URL="https://tiles.example.test/{z}/{x}/{y}.png",
+        MAP_TILE_ATTRIBUTION="Example tiles",
+        MAP_TILE_MAX_ZOOM=17,
+    )
+    def test_the_map_uses_the_configured_tile_provider(self):
+        response = self.client.get(reverse("fuel:map"))
+
+        self.assertContains(response, "https://tiles.example.test/{z}/{x}/{y}.png")
+        self.assertContains(response, "Example tiles")
+        self.assertContains(response, "maxZoom: 17")
 
     def test_screens_render_with_data(self):
         vehicle = Vehicle.objects.create(name="Car", is_default=True)
@@ -463,19 +495,15 @@ class ScreenSmokeTests(TestCase):
 
         for url in (
             reverse("core:home"),
-            reverse("fuel:stations"),
             reverse("fuel:station_detail", args=[station.pk]),
-            reverse("fuel:fillups"),
-            reverse("fuel:fillup_edit", args=[fill_up.pk]),
             reverse("fuel:advisory"),
-            reverse("fuel:vehicles"),
         ):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_signed_out_users_reach_no_screen(self):
         self.client.logout()
-        for name in ("core:home", "fuel:map", "fuel:stations", "fuel:fillups"):
+        for name in ("core:home", "fuel:map", "fuel:advisory"):
             with self.subTest(screen=name):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
@@ -660,10 +688,6 @@ class PriceCoverageTests(TestCase):
         # The fix is a link, not a paragraph telling you to go and find it.
         self.assertContains(response, reverse("fuel:advisory"))
 
-    def test_the_stations_list_carries_the_same_prompt(self):
-        response = self.client.get(reverse("fuel:stations"))
-        self.assertContains(response, "Nothing is priced yet")
-
     def test_a_stale_advisory_reads_differently_from_none_at_all(self):
         DOEAdvisory.objects.create(
             week_of=week_start() - timedelta(days=21), region="NCR", brand="",
@@ -675,6 +699,7 @@ class PriceCoverageTests(TestCase):
         # nothing, and needs a different prompt.
         self.assertContains(response, "No advisory for the week")
         self.assertNotContains(response, "Nothing is priced yet")
+        self.assertNotContains(response, "Estimated")
 
     def test_once_this_week_is_entered_the_warning_goes(self):
         DOEAdvisory.objects.create(
@@ -717,6 +742,7 @@ class PriceBandTests(TestCase):
 
         quote = quotes_for([unbranded], "gas_95")[unbranded.pk]
         self.assertEqual(quote.tier, PriceTier.ESTIMATED)
+        self.assertEqual(quote.tier_label, "Regional price")
 
     def test_a_branded_station_still_prefers_its_brand_row(self):
         branded = make_station(osm_id=901, brand="Petron")

@@ -183,6 +183,15 @@ class PromoTests(TestCase):
         options = where_to_buy(origin=ORIGIN, category=SpendCategory.APPAREL)
         self.assertTrue(all(not o.promos for o in options))
 
+    def test_a_merchant_promo_without_an_issuer_is_not_attached(self):
+        Promo.objects.create(
+            title="Store sale", brand="Uniqlo",
+            category=SpendCategory.APPAREL, discount_pct=Decimal("20"),
+            ends_on=timezone.localdate() + timedelta(days=10),
+        )
+        options = where_to_buy(origin=ORIGIN, category=SpendCategory.APPAREL)
+        self.assertTrue(all(not o.promos for o in options))
+
     def test_a_place_with_a_promo_leads_over_one_without(self):
         Promo.objects.create(
             title="20% OFF at Uniqlo", brand="Uniqlo", issuer="Metrobank",

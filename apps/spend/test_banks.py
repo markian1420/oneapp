@@ -22,7 +22,8 @@ from django.utils import timezone
 from apps.core.categories import SpendCategory
 from apps.places.models import Place, PlaceKind
 
-from .banks import BankPromo, parse_metrobank
+from .banks import SOURCES, BankPromo
+from .banks.metrobank import parse as parse_metrobank
 from .models import Promo
 
 STANDARD_CARDS = [
@@ -159,6 +160,7 @@ class CategoryTests(TestCase):
 
 class ImportCommandTests(TestCase):
     def _run(self, promos, **options):
+        options.setdefault("bank", "metrobank")
         out = StringIO()
         with mock.patch("apps.spend.management.commands.import_bank_promos.fetch",
                         return_value=promos):
@@ -228,11 +230,24 @@ class ImportCommandTests(TestCase):
         with self.assertRaises(CommandError):
             call_command("import_bank_promos", bank="notabank", stdout=StringIO())
 
-    def test_a_failed_fetch_stops_with_a_clear_message(self):
+    def test_one_bank_failing_does_not_stop_the_others(self):
+        """A bank being down or redesigned should not cost the other five."""
+        out = StringIO()
+
+        def flaky(bank):
+            if bank == "metrobank":
+                raise ValueError("page structure changed")
+            return [self._promo(reference=f"/{bank}")]
+
         with mock.patch("apps.spend.management.commands.import_bank_promos.fetch",
-                        side_effect=ValueError("page structure changed")):
-            with self.assertRaises(CommandError):
-                call_command("import_bank_promos", stdout=StringIO(), stderr=StringIO())
+                        side_effect=flaky):
+            call_command("import_bank_promos", bank="all",
+                         stdout=out, stderr=StringIO())
+
+        output = out.getvalue()
+        self.assertIn("could not read", output)
+        self.assertIn("Metrobank", output)
+        self.assertEqual(Promo.objects.count(), len(SOURCES) - 1)
 
     def test_importing_stores_no_card_of_yours(self):
         self._run([self._promo(card_name="Platinum Mastercard")])

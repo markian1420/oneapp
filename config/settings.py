@@ -20,6 +20,7 @@ env = environ.Env(
     DJANGO_CSRF_TRUSTED_ORIGINS=(list, []),
     DJANGO_SECURE_SSL_REDIRECT=(bool, False),
     OVERPASS_TIMEOUT=(int, 180),
+    MAP_TILE_MAX_ZOOM=(int, 19),
 )
 
 environ.Env.read_env(BASE_DIR / ".env")
@@ -203,6 +204,21 @@ PRICE_FRESH_DAYS = env.int("PRICE_FRESH_DAYS", default=14)
 # Cap on how many stations one map viewport request may return. The browser
 # never receives the whole table; it asks for the box it is looking at.
 MAP_MAX_STATIONS = env.int("MAP_MAX_STATIONS", default=300)
+
+# OSM Foundation's public tile server may return 403s when a network or app is
+# blocked by policy enforcement, so the browser map uses an OSM-derived hosted
+# basemap that can be swapped from the environment.
+MAP_TILE_URL = env(
+    "MAP_TILE_URL",
+    default="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+)
+MAP_TILE_ATTRIBUTION = env(
+    "MAP_TILE_ATTRIBUTION",
+    default=(
+        "&copy; OpenStreetMap contributors &copy; CARTO"
+    ),
+)
+MAP_TILE_MAX_ZOOM = env("MAP_TILE_MAX_ZOOM")
 
 LOGGING = {
     "version": 1,

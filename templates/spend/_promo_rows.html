@@ -1,0 +1,46 @@
+{% comment %}
+One promo per row, shared by the merchant and card promo tables so the two
+never drift apart. `show_bank` mirrors the column list the view built.
+{% endcomment %}
+{% for row in rows %}
+  {% with promo=row.promo %}
+    <tr>
+      <td>
+        {% if promo.source_url %}
+          <a href="{{ promo.source_url }}" target="_blank" rel="noopener"
+             class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
+            {{ promo.title }}
+          </a>
+        {% else %}
+          <span class="font-bold text-ink dark:text-slate-200">{{ promo.title }}</span>
+        {% endif %}
+        {% if promo.detail %}
+          <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ promo.detail }}</span>
+        {% endif %}
+      </td>
+      {% if show_bank %}
+        <td class="whitespace-nowrap text-[12px]">{{ promo.issuer }}</td>
+      {% endif %}
+      <td class="text-[12px]">
+        {% if promo.brand %}{{ promo.brand }}
+        {% else %}<span class="text-ink-muted dark:text-slate-500">{{ promo.get_category_display }}</span>{% endif %}
+      </td>
+      <td class="text-[12px]">
+        {% if promo.card_name %}{{ promo.card_name }}
+        {% elif promo.issuer %}<span class="text-ink-muted dark:text-slate-500">Any {{ promo.issuer }} card</span>
+        {% else %}<span class="text-ink-muted dark:text-slate-500">Any payment</span>{% endif %}
+      </td>
+      <td class="whitespace-nowrap text-right mono font-bold text-brand-700 dark:text-brand-400">
+        {% if promo.discount_pct %}{{ promo.discount_pct|floatformat:"-2" }}%
+        {% elif promo.price %}&#8369;{{ promo.price|floatformat:"-2" }}
+        {% else %}&mdash;{% endif %}
+      </td>
+      <td class="whitespace-nowrap text-[12px]">
+        {{ promo.ends_on|date:"d M Y"|default:"&mdash;" }}
+        {% if promo.days_left is not None and promo.days_left <= 7 %}
+          <span class="ml-1 badge-warning">{{ promo.days_left }}d</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% endwith %}
+{% endfor %}

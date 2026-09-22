@@ -63,8 +63,9 @@ function isShellAsset(url) {
 }
 
 function isTileOrLiveData(url) {
+  const tileHosts = ['tile.openstreetmap.org', 'basemaps.cartocdn.com'];
   return (
-    url.hostname.endsWith('tile.openstreetmap.org')
+    tileHosts.some((host) => url.hostname.endsWith(host))
     || url.pathname.endsWith('.json')
     || url.pathname.endsWith('places.json')
   );

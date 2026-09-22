@@ -10,7 +10,7 @@ that will ever exist here is one off your own receipt.
 What the app can offer instead, honestly:
 
   * distance, which it knows exactly;
-  * live promos at that place, which the banks publish and which are real;
+  * live card promos at that place, which the banks publish and which are real;
   * the DA regional price as a benchmark for what a fair ask looks like;
   * your own logged price, once there is one.
 
@@ -30,7 +30,7 @@ from apps.core.categories import SpendCategory
 from apps.places.geo import bounding_box, road_km
 from apps.places.models import Place, PlaceKind
 
-from .models import Promo, PurchaseItem
+from .models import PurchaseItem
 from .services import live_promos
 
 # Which kinds of place sell which category. A category the app has no places
@@ -141,7 +141,7 @@ def promos_by_place(places, category: str) -> tuple[dict[int, list], list]:
     to all clothing is context, and belongs beside the list rather than in
     every row of it.
     """
-    running = live_promos(category=category)
+    running = live_promos(category=category, card_promos=True)
     by_brand: dict[str, list] = {}
     category_wide = []
 

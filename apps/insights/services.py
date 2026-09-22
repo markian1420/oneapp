@@ -1,11 +1,9 @@
 """
-What the app has worked out from your own data.
+What the app has worked out from the remaining tracked data.
 
-Deliberately explainable statistics rather than a model. At the volumes a
-personal budget produces - tens of fill-ups, hundreds of purchases - anything
-opaque would be fitting noise and presenting it with a straight face. Rolling
-medians, day-of-week effects and simple deltas are things you can check against
-your own memory, which is what makes advice worth following.
+Deliberately explainable signals rather than a model. At the volumes this app
+produces, anything opaque would be fitting noise and presenting it with a
+straight face.
 
 Every insight carries how confident it is and what it was computed from, so a
 thin one reads as thin instead of arriving with the same authority as a solid
@@ -15,25 +13,11 @@ these on day one.
 
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass, field
-from datetime import date, timedelta
-from decimal import Decimal
 
-from django.db.models import Avg, Count, Sum
-from django.utils import timezone
-
-from apps.core.categories import SpendCategory, category_for_place
-from apps.fuel.models import FillUp
-from apps.fuel.services import fuel_economy
 from apps.grocery.services import biggest_movers
-from apps.spend.models import Purchase, PurchaseItem
-from apps.spend.services import (
-    card_promos_at,
-    expiring_promos,
-    live_promos,
-    spend_by_category,
-)
+from apps.spend.models import Purchase
+from apps.spend.services import card_promos_at
 
 # Below this many observations an insight is offered as a hint rather than a
 # finding. Five is not statistically meaningful; it is simply the point where a
@@ -90,119 +74,6 @@ class Briefing:
         return bool(self.insights)
 
 
-# ---------------------------------------------------------------- fuel ----
-
-def fuel_rhythm() -> Insight | None:
-    """How often you refuel, and therefore when you are next due.
-
-    Uses the median gap rather than the mean: one holiday road trip would drag
-    an average badly, and the question being answered is "what is normal".
-    """
-    fills = list(FillUp.objects.order_by("filled_at").only("filled_at"))
-    if len(fills) < 3:
-        return None
-
-    gaps = [
-        (b.filled_at - a.filled_at).days
-        for a, b in zip(fills, fills[1:])
-        if (b.filled_at - a.filled_at).days > 0
-    ]
-    if not gaps:
-        return None
-
-    typical = int(statistics.median(gaps))
-    since = (timezone.now() - fills[-1].filled_at).days
-    due_in = typical - since
-
-    if due_in <= 0:
-        headline = f"You are due to refuel - {since} days since the last one"
-        tone = "warn"
-    else:
-        headline = f"Next fill-up due in about {due_in} days"
-        tone = "info"
-
-    return Insight(
-        key="fuel_rhythm",
-        headline=headline,
-        detail=f"You normally refuel every {typical} days.",
-        tone=tone,
-        observations=len(gaps),
-        action_url="/fuel/",
-        action_label="Find a station",
-    )
-
-
-def fuel_economy_insight() -> Insight | None:
-    fills = list(FillUp.objects.order_by("-filled_at")[:20])
-    economy = fuel_economy(fills)
-    if economy is None:
-        return None
-
-    vehicle = fills[0].vehicle
-    claimed = vehicle.km_per_liter
-    drift = economy - claimed
-
-    if abs(drift) < Decimal("0.5"):
-        return Insight(
-            key="economy",
-            headline=f"Real economy is {economy} km/L, close to what you set",
-            observations=len([f for f in fills if f.odometer_km]),
-            tone="good",
-        )
-
-    direction = "better" if drift > 0 else "worse"
-    return Insight(
-        key="economy",
-        headline=f"Real economy is {economy} km/L, {direction} than the {claimed} set",
-        detail=(
-            "Comparisons price the detour using this figure, so correcting it on "
-            "the vehicle makes every station ranking more accurate."
-        ),
-        tone="good" if drift > 0 else "warn",
-        observations=len([f for f in fills if f.odometer_km]),
-        action_url=f"/fuel/vehicles/{vehicle.pk}/",
-        action_label="Correct it",
-    )
-
-
-def cheapest_station_habit() -> Insight | None:
-    """Whether you actually go where it is cheapest.
-
-    Revealed preference against the receipts: the interesting case is a station
-    you use often that is consistently dearer than another you also use.
-    """
-    rows = (
-        FillUp.objects.values("place__id", "place__name", "place__brand")
-        .annotate(visits=Count("id"), average=Avg("price_per_liter"))
-        .filter(visits__gte=2)
-        .order_by("average")
-    )
-    rows = list(rows)
-    if len(rows) < 2:
-        return None
-
-    cheapest, dearest = rows[0], rows[-1]
-    gap = dearest["average"] - cheapest["average"]
-    if gap < Decimal("0.50"):
-        return None
-
-    name = lambda r: r["place__brand"] or r["place__name"] or "a station"  # noqa: E731
-    return Insight(
-        key="station_habit",
-        headline=(
-            f"{name(cheapest)} has averaged {gap:.2f}/L less than {name(dearest)}"
-        ),
-        detail=(
-            f"Across {cheapest['visits']} and {dearest['visits']} visits. On a "
-            f"40-litre tank that is about {gap * 40:.0f} pesos a fill."
-        ),
-        tone="info",
-        observations=cheapest["visits"] + dearest["visits"],
-        action_url="/fuel/",
-        action_label="Compare on the map",
-    )
-
-
 # ------------------------------------------------------------- grocery ----
 
 def grocery_swing() -> Insight | None:
@@ -249,36 +120,6 @@ def grocery_swing() -> Insight | None:
     )
 
 
-# --------------------------------------------------------------- spend ----
-
-def spend_drift() -> Insight | None:
-    """The category moving most against last month."""
-    rows = [r for r in spend_by_category() if r.previous or r.spent]
-    if not rows:
-        return None
-
-    ranked = [r for r in rows if r.change_pct is not None]
-    if not ranked:
-        return None
-
-    worst = max(ranked, key=lambda r: r.change_pct)
-    if worst.change_pct < 15:
-        return None
-
-    return Insight(
-        key="spend_drift",
-        headline=f"{worst.label} is up {worst.change_pct}% on last month",
-        detail=(
-            f"{worst.spent:.0f} so far against {worst.previous:.0f} for the whole "
-            "of last month."
-        ),
-        tone="warn" if worst.change_pct < 50 else "bad",
-        observations=worst.count,
-        action_url="/spend/",
-        action_label="See the purchases",
-    )
-
-
 def card_promo_coverage() -> Insight | None:
     """Card promos running where you actually shop.
 
@@ -321,73 +162,18 @@ def card_promo_coverage() -> Insight | None:
     )
 
 
-def promo_watch() -> Insight | None:
-    expiring = expiring_promos()
-    if not expiring:
-        return None
-
-    first = expiring[0]
-    return Insight(
-        key="promo_watch",
-        headline=(
-            f"{len(expiring)} promo{'s' if len(expiring) > 1 else ''} ending within 3 days"
-        ),
-        detail=f"Soonest: {first.title}"
-               + (f" at {first.brand}" if first.brand else ""),
-        tone="warn",
-        observations=len(live_promos()),
-        action_url="/spend/promos/",
-        action_label="See promos",
-    )
-
-
-def idle_wardrobe() -> Insight | None:
-    unworn = list(
-        PurchaseItem.objects.filter(is_wearable=True, wears=0)
-        .select_related("purchase")
-    )
-    if not unworn:
-        return None
-
-    spent = sum((i.amount for i in unworn), Decimal("0"))
-    if spent < Decimal("500"):
-        return None
-
-    return Insight(
-        key="idle_wardrobe",
-        headline=f"{len(unworn)} tracked item{'s' if len(unworn) > 1 else ''} never worn",
-        detail=f"About {spent:.0f} pesos sitting unused.",
-        tone="warn",
-        observations=len(unworn),
-        action_url="/spend/wardrobe/",
-        action_label="Open the wardrobe",
-    )
-
-
 # ------------------------------------------------------------ assembly ----
 
 BUILDERS = (
-    fuel_rhythm,
-    fuel_economy_insight,
-    cheapest_station_habit,
     grocery_swing,
-    spend_drift,
     card_promo_coverage,
-    promo_watch,
-    idle_wardrobe,
 )
 
 # What each insight needs before it can say anything, so the app can explain
 # its own silence instead of just looking empty.
 REQUIREMENTS = {
-    "fuel_rhythm": "3 fill-ups, to know how often you refuel",
-    "economy": "2 full tanks with odometer readings",
-    "station_habit": "2 visits each to at least 2 stations",
     "grocery_swing": "a few days of DA prices imported",
-    "spend_drift": "purchases logged in two different months",
     "card_promo_coverage": "a card promo entered for somewhere you shop",
-    "promo_watch": "a promo with an end date",
-    "idle_wardrobe": "clothing logged with wear tracking on",
 }
 
 

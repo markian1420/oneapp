@@ -14,3 +14,8 @@ openpyxl==3.1.5
 # plain text extractor because the parser works from word coordinates: the
 # columns in that table are only distinguishable by geometry.
 pdfplumber==0.11.10
+
+# Reading the banks' promo listings. Five of the six readable issuers publish
+# HTML rather than JSON, and their markup is the sort real sites have - unclosed
+# tags, dates inside comments - which a stack of regexes handles badly.
+beautifulsoup4==4.14.2

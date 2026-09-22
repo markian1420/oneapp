@@ -1,4 +1,4 @@
-"""Tests for purchases, promos and wardrobe economics."""
+"""Tests for purchases and public card promos."""
 
 from __future__ import annotations
 
@@ -11,18 +11,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.categories import SpendCategory
-from apps.fuel.models import FillUp, Vehicle
+from apps.core.tables import DEFAULT_PAGE_SIZE
 from apps.places.models import Place, PlaceKind
 
 from .models import Promo, Purchase, PurchaseItem
-from .services import (
-    expiring_promos,
-    live_promos,
-    spend_by_category,
-    stale_promos,
-    wardrobe,
-    wardrobe_summary,
-)
+from .services import expiring_promos, live_promos, stale_promos
 
 
 def make_purchase(**overrides) -> Purchase:
@@ -67,7 +60,7 @@ class PurchaseTests(TestCase):
         self.assertFalse(make_purchase().items_disagree)
 
 
-class CostPerWearTests(TestCase):
+class PurchaseItemEconomicsTests(TestCase):
     def setUp(self):
         self.purchase = make_purchase(category=SpendCategory.APPAREL)
 
@@ -91,23 +84,6 @@ class CostPerWearTests(TestCase):
         self.assertEqual(self._item("3000", 100).verdict, "Earned its price")
         self.assertEqual(self._item("600", 2).verdict, "Expensive per wear so far")
         self.assertEqual(self._item("500", 0).verdict, "Not worn yet")
-
-    def test_unworn_items_lead_the_wardrobe(self):
-        self._item("600", 5)
-        unworn = self._item("4000", 0)
-
-        # The unworn expensive thing is what the screen exists to make you see.
-        self.assertEqual(wardrobe()[0].pk, unworn.pk)
-
-    def test_the_summary_averages_across_everything(self):
-        self._item("1000", 10)
-        self._item("1000", 10)
-
-        summary = wardrobe_summary()
-        self.assertEqual(summary["items"], 2)
-        self.assertEqual(summary["wears"], 20)
-        self.assertEqual(summary["cost_per_wear"], Decimal("100.00"))
-
 
 class PromoTests(TestCase):
     def _promo(self, **overrides) -> Promo:
@@ -163,149 +139,72 @@ class PromoTests(TestCase):
         self.assertEqual([p.title for p in live_promos(brand="jollibee")], ["Food"])
 
 
-class SpendSummaryTests(TestCase):
-    def test_fuel_is_counted_even_though_it_lives_elsewhere(self):
-        vehicle = Vehicle.objects.create(name="Car", is_default=True)
-        place = Place.objects.create(
-            kind=PlaceKind.FUEL, osm_type=Place.OSMType.NODE, osm_id=1,
-            name="Shell", brand="Shell",
-            latitude=Decimal("14.58"), longitude=Decimal("121.06"),
-        )
-        FillUp.objects.create(
-            vehicle=vehicle, place=place, fuel_type="gas_95",
-            liters=Decimal("40"), price_per_liter=Decimal("78.5"),
-            total_cost=Decimal("3140"),
-        )
-        make_purchase(total=Decimal("1000"))
-
-        totals = {row.category: row for row in spend_by_category()}
-        # A summary that silently omits the biggest recurring cost is worse
-        # than no summary.
-        self.assertEqual(totals["fuel"].spent, Decimal("3140"))
-        self.assertEqual(totals["grocery"].spent, Decimal("1000"))
-
-    def test_the_biggest_category_leads(self):
-        make_purchase(category=SpendCategory.GROCERY, total=Decimal("5000"))
-        make_purchase(category=SpendCategory.DINING, total=Decimal("500"))
-
-        self.assertEqual(spend_by_category()[0].category, SpendCategory.GROCERY)
-
-    def test_a_category_with_no_spend_still_appears_at_zero(self):
-        categories = {row.category for row in spend_by_category()}
-        self.assertEqual(categories, set(SpendCategory.values))
-
-
 class SpendScreenTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("spender", password="not-a-real-password")
         self.client.force_login(self.user)
 
     def test_screens_render_empty(self):
-        for name in ("spend:purchases", "spend:promos", "spend:wardrobe",
-                     "spend:purchase_create"):
+        for name in ("spend:where", "spend:card_promos"):
             with self.subTest(screen=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
     def test_screens_render_with_data(self):
-        purchase = make_purchase(category=SpendCategory.APPAREL)
-        PurchaseItem.objects.create(
-            purchase=purchase, description="Shirt", amount=Decimal("600"),
-            is_wearable=True, wears=3,
-        )
         Promo.objects.create(
-            title="Sale", category=SpendCategory.APPAREL,
+            title="Sale", issuer="BPI", category=SpendCategory.APPAREL,
             discount_pct=Decimal("30"),
             ends_on=timezone.localdate() + timedelta(days=5),
         )
 
-        for url in (reverse("spend:purchases"), reverse("spend:promos"),
-                    reverse("spend:wardrobe"),
-                    reverse("spend:purchase_detail", args=[purchase.pk])):
+        for url in (reverse("spend:where"), reverse("spend:card_promos")):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_promos_are_read_only(self):
-        """Nothing on this screen is hand-managed.
-
-        Promos come from what the issuer published, and the importer keys on
-        (issuer, source_ref) - so a promo removed here would simply reappear on
-        the next refresh. Better to have no such button than one that quietly
-        undoes itself.
-        """
-        response = self.client.get(reverse("spend:promos"))
-
-        self.assertNotIn("form", response.context)
-        self.assertNotContains(response, "Save promo")
-        self.assertEqual(
-            self.client.post(reverse("spend:promos"), {"title": "Typed in"}).status_code,
-            405,
-        )
-        self.assertFalse(Promo.objects.exists())
-
-    def test_card_promos_are_not_duplicated_onto_the_merchant_screen(self):
-        """Card promos live on their own screen, which pages them.
-
-        Letting them through here meant rendering the same 675 rows twice, the
-        second time with no pager at all.
-        """
+    def test_card_promos_search_and_page_on_the_server(self):
+        """The browser gets one page of rows, never the whole set."""
+        for n in range(15):
+            Promo.objects.create(
+                title=f"Coffee deal {n}", issuer="RCBC", brand="Il Padrino",
+                category=SpendCategory.DINING, discount_pct=Decimal("30"),
+                ends_on=timezone.localdate() + timedelta(days=30),
+            )
         Promo.objects.create(
-            title="Metrobank dining deal", issuer="Metrobank",
-            category=SpendCategory.DINING, discount_pct=Decimal("15"),
-            ends_on=timezone.localdate() + timedelta(days=5),
+            title="Shoe sale", issuer="BPI", category=SpendCategory.APPAREL,
+            discount_pct=Decimal("20"),
+            ends_on=timezone.localdate() + timedelta(days=30),
         )
+
+        page = self.client.get(reverse("spend:card_promos"))
+        self.assertEqual(page.context["total"], 16)
+        self.assertEqual(len(page.context["rows"]), DEFAULT_PAGE_SIZE)
+
+        found = self.client.get(reverse("spend:card_promos"), {"q": "shoe"})
+        self.assertEqual([r["title"] for r in found.context["rows"]], ["Shoe sale"])
+
+        by_bank = self.client.get(reverse("spend:card_promos"), {"q": "rcbc"})
+        self.assertEqual(by_bank.context["total"], 15)
+
+    def test_a_search_survives_sorting_and_paging(self):
+        """Sorting a filtered table must not quietly drop the filter."""
         Promo.objects.create(
-            title="Store sale", category=SpendCategory.APPAREL,
-            discount_pct=Decimal("30"),
-            ends_on=timezone.localdate() + timedelta(days=5),
+            title="Shoe sale", issuer="BPI", category=SpendCategory.APPAREL,
+            discount_pct=Decimal("20"),
+            ends_on=timezone.localdate() + timedelta(days=30),
         )
-
-        response = self.client.get(reverse("spend:promos"))
-
-        self.assertEqual([p.title for p in response.context["live"]], ["Store sale"])
-        self.assertEqual(response.context["card_promo_count"], 1)
-
-    def test_recording_a_wear_increments_it(self):
-        purchase = make_purchase(category=SpendCategory.APPAREL)
-        item = PurchaseItem.objects.create(
-            purchase=purchase, description="Shirt", amount=Decimal("600"),
-            is_wearable=True,
-        )
-        self.client.post(reverse("spend:item_wear", args=[item.pk]))
-
-        item.refresh_from_db()
-        self.assertEqual(item.wears, 1)
-
-    def test_the_purchase_screen_lists_card_promos_for_the_place(self):
-        place = Place.objects.create(
-            kind=PlaceKind.SUPERMARKET, osm_type=Place.OSMType.NODE, osm_id=9,
-            name="Puregold", brand="Puregold",
-            latitude=Decimal("14.58"), longitude=Decimal("121.06"),
-        )
-        Promo.objects.create(
-            title="10% off groceries", issuer="BPI", brand="Puregold",
-            category=SpendCategory.GROCERY, discount_pct=Decimal("10"),
-            ends_on=timezone.localdate() + timedelta(days=20),
-        )
-        purchase = make_purchase(place=place, paid_with="BPI credit")
-
         response = self.client.get(
-            reverse("spend:purchase_detail", args=[purchase.pk])
+            reverse("spend:card_promos"), {"q": "shoe", "sort": "title"}
         )
-        self.assertEqual(len(response.context["available_promos"]), 1)
 
-    def test_a_purchase_needs_a_place_or_a_name(self):
-        response = self.client.post(reverse("spend:purchase_create"), {
-            "category": SpendCategory.GROCERY, "total": "500",
-            "occurred_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
-        })
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(Purchase.objects.exists())
+        self.assertEqual(response.context["total"], 1)
+        sortable = [h for h in response.context["table"].headers if h.sortable]
+        self.assertTrue(all("q=shoe" in h.url for h in sortable))
 
     def test_signed_out_users_reach_nothing(self):
         self.client.logout()
-        response = self.client.get(reverse("spend:purchases"))
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        for name in ("spend:where", "spend:card_promos"):
+            response = self.client.get(reverse(name))
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("/login/", response["Location"])
 
 
 class CardPromoTests(TestCase):

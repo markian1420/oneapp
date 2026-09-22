@@ -13,9 +13,8 @@ themselves describe the values as derived from the weekly DOE advisory rather
 than observed at the pump.
 
 So it is imported as what it actually is - a regional price band. The median
-becomes the prevailing price for the region, which finally gives every station
-on the map a number, and it lands at the Estimated tier where a regional figure
-belongs. The spread is imported alongside it, because the gap between the
+becomes the prevailing price for Metro Manila, which finally gives every station
+in the area a number. The spread is imported alongside it, because the gap between the
 cheapest and dearest pump is the entire argument for comparing at all: nearly
 23 pesos a litre on unleaded, which is over 900 pesos on a tank.
 
@@ -172,6 +171,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Dry run - nothing was written."))
         else:
             self.stdout.write(
-                "Filed as a regional median, so stations show it as Estimated. "
+                "Filed as a Metro Manila regional median. "
                 "Anything you log yourself still outranks it."
             )

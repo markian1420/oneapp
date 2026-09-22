@@ -7,13 +7,6 @@
   </p>
 {% endblock %}
 
-{% block topbar_actions %}
-  <a href="{% url 'spend:promos' %}" class="btn-ghost btn-sm">
-    {% include "partials/_icon.html" with name="tag" class="h-4 w-4" %}
-    <span class="hidden sm:inline">Add a promo</span>
-  </a>
-{% endblock %}
-
 {% block content %}
 <div class="panel panel-pad mb-5 border-brand-300 bg-brand-50 dark:border-brand-500/40 dark:bg-brand-500/10">
   <p class="text-sm font-bold text-brand-900 dark:text-brand-200">
@@ -47,6 +40,11 @@
 {% endif %}
 
 <form method="get" class="panel panel-pad mb-5 flex flex-wrap items-end gap-3">
+  <label class="min-w-0 flex-1 basis-64">
+    <span class="form-label">Search</span>
+    <input type="search" name="q" value="{{ search }}" class="form-control"
+           placeholder="Shop, offer, bank or card" autocomplete="off">
+  </label>
   <label class="min-w-0">
     <span class="form-label">Bank</span>
     <select name="issuer" class="form-control" data-autosubmit>
@@ -65,6 +63,7 @@
       {% endfor %}
     </select>
   </label>
+  <button type="submit" class="btn-primary btn-sm">Search</button>
   <a href="{% url 'spend:card_promos' %}" class="btn-ghost btn-sm">Reset</a>
 </form>
 
@@ -72,58 +71,28 @@
   <div class="table-wrap">
     <table class="table min-w-[820px]">
       <thead>{% include "partials/_table_head.html" %}</thead>
-      <tbody>
-        {% for row in rows %}
-          {% with promo=row.promo %}
-            <tr>
-              <td>
-                {% if promo.source_url %}
-                  <a href="{{ promo.source_url }}" target="_blank" rel="noopener"
-                     class="font-bold text-ink hover:text-brand-700 dark:text-slate-200 dark:hover:text-brand-400">
-                    {{ promo.title }}
-                  </a>
-                {% else %}
-                  <span class="font-bold text-ink dark:text-slate-200">{{ promo.title }}</span>
-                {% endif %}
-                {% if promo.detail %}
-                  <span class="block truncate text-[11px] text-ink-muted dark:text-slate-500">{{ promo.detail }}</span>
-                {% endif %}
-              </td>
-              <td class="whitespace-nowrap text-[12px]">{{ promo.issuer }}</td>
-              <td class="text-[12px]">
-                {% if promo.brand %}{{ promo.brand }}
-                {% else %}<span class="text-ink-muted dark:text-slate-500">{{ promo.get_category_display }}</span>{% endif %}
-              </td>
-              <td class="text-[12px]">
-                {% if promo.card_name %}{{ promo.card_name }}
-                {% else %}<span class="text-ink-muted dark:text-slate-500">Any {{ promo.issuer }} card</span>{% endif %}
-              </td>
-              <td class="whitespace-nowrap text-right mono font-bold text-brand-700 dark:text-brand-400">
-                {% if promo.discount_pct %}{{ promo.discount_pct|floatformat:"-2" }}%
-                {% elif promo.price %}&#8369;{{ promo.price|floatformat:"-2" }}
-                {% else %}&mdash;{% endif %}
-              </td>
-              <td class="whitespace-nowrap text-[12px]">
-                {{ promo.ends_on|date:"d M Y" }}
-                {% if promo.days_left <= 7 %}<span class="ml-1 badge-warning">{{ promo.days_left }}d</span>{% endif %}
-              </td>
-            </tr>
-          {% endwith %}
-        {% endfor %}
-      </tbody>
+      <tbody>{% include "spend/_promo_rows.html" with show_bank=True %}</tbody>
     </table>
   </div>
   {% include "partials/_table_pager.html" %}
 {% else %}
   <div class="panel panel-pad text-center">
-    <p class="text-sm font-bold text-ink dark:text-white">No card promos recorded yet.</p>
-    <p class="mx-auto mt-1 max-w-2xl text-sm text-ink-muted dark:text-slate-400">
-      Pull them straight from a bank that publishes them:
-      <code class="kbd">python manage.py import_bank_promos --bank metrobank</code>.
-      Metrobank ships its whole promo catalogue as structured data, expiry dates and
-      all &mdash; far better than any merchant source, where the terms are baked into
-      a graphic.
+    <p class="text-sm font-bold text-ink dark:text-white">
+      {% if search or issuer or category %}Nothing matches that.{% else %}No card promos recorded yet.{% endif %}
     </p>
+    <p class="mx-auto mt-1 max-w-2xl text-sm text-ink-muted dark:text-slate-400">
+      {% if search or issuer or category %}
+        Try a different search, or clear the filters.
+      {% else %}
+        Pull them from every bank that publishes readably:
+        <code class="kbd">python manage.py import_bank_promos --bank all</code>.
+        Six of the seventeen Philippine issuers do; run
+        <code class="kbd">--list</code> to see which, and why the rest do not.
+      {% endif %}
+    </p>
+    {% if search or issuer or category %}
+      <a href="{% url 'spend:card_promos' %}" class="btn-ghost btn-sm mt-3">Clear the filters</a>
+    {% endif %}
   </div>
 {% endif %}
 
@@ -131,8 +100,8 @@
   <div class="panel panel-pad mt-5">
     <p class="eyebrow">Worth re-checking</p>
     <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-      {{ undated|length }} entered with no end date. Banks usually do publish one, so
-      a blank here is more likely a gap in the entry than an offer that runs for ever.
+      {{ undated|length }} with no end date. Banks usually do publish one, so a blank
+      here is more likely a gap in what was read than an offer that runs for ever.
     </p>
   </div>
 {% endif %}

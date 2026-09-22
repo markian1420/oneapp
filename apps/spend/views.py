@@ -1,179 +1,43 @@
-"""Spend screens: purchases, promos and the wardrobe."""
+"""Shopping screens: nearby places and public card promos."""
 
 from __future__ import annotations
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
-from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_GET, require_POST
+from django.shortcuts import render
 
 from apps.core.categories import SpendCategory
-from apps.core.tables import Column, build_list_table, build_table
+from apps.core.tables import Column, build_list_table
 from apps.core.views import module
 
-from .forms import ItemForm, ProductForm, ProductPriceForm, PurchaseForm
 from .shopping import CATEGORY_KINDS, reference_price, where_to_buy
-from .models import Product, ProductPrice, Promo, Purchase, PurchaseItem
-from .services import (
-    card_promos_at,
-    expiring_promos,
-    issuers,
-    live_promos,
-    spend_by_category,
-    stale_promos,
-    wardrobe,
-    wardrobe_summary,
-)
+from .services import issuers, live_promos
 
 
-@login_required
-@module("spend_purchases", "Spending")
-def purchases(request):
-    queryset = Purchase.objects.select_related("place")
-
-    category = request.GET.get("category", "")
-    if category in SpendCategory.values:
-        queryset = queryset.filter(category=category)
-
-    columns = [
-        Column("occurred_at", "When", order_by=("occurred_at",)),
-        Column("where", "Where", order_by=("place__name", "merchant")),
-        Column("category", "Category", order_by=("category",)),
-        Column("paid_with", "Paid with", order_by=("paid_with",)),
-        Column("total", "Total", order_by=("total",), align="right"),
-        Column("actions", "", align="right"),
+def _promo_columns(*, bank: bool) -> list[Column]:
+    """Columns for a promo table. The bank column only earns its width when
+    more than one issuer is on screen."""
+    columns = [Column("title", "Offer", order_by=("title",))]
+    if bank:
+        columns.append(Column("issuer", "Bank", order_by=("issuer",)))
+    columns += [
+        Column("brand", "Where", order_by=("brand",)),
+        Column("card_name", "Qualifying card", order_by=("card_name",)),
+        Column("discount", "Deal", order_by=("discount_pct",), align="right"),
+        Column("ends_on", "Ends", order_by=("ends_on",)),
     ]
-    table = build_table(
-        request, queryset, columns,
-        default_sort="occurred_at", default_desc=True, preserve=("category",),
-    )
-
-    return render(request, "spend/purchases.html", {
-        "table": table,
-        "purchases": table.page.object_list,
-        "categories": SpendCategory.choices,
-        "category": category,
-        "totals": queryset.aggregate(spent=Sum("total")),
-        "by_category": spend_by_category(),
-    })
+    return columns
 
 
-@login_required
-@module("spend_purchases", "Log a purchase")
-def purchase_create(request):
-    if request.method == "POST":
-        form = PurchaseForm(request.POST)
-        if form.is_valid():
-            purchase = form.save()
-            messages.success(request, "Purchase logged.")
-            return redirect("spend:purchase_detail", pk=purchase.pk)
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        initial = {}
-        place_id = request.GET.get("place", "")
-        if place_id.isdigit():
-            initial["place"] = place_id
-        form = PurchaseForm(initial=initial or None)
-
-    return render(request, "spend/purchase_form.html",
-                  {"form": form, "creating": True})
-
-
-@login_required
-@module("spend_purchases", "Purchase")
-def purchase_detail(request, pk: int):
-    purchase = get_object_or_404(
-        Purchase.objects.select_related("place").prefetch_related("items"),
-        pk=pk,
-    )
-    request.page_title = purchase.where
-
-    if request.method == "POST":
-        form = ItemForm(request.POST)
-        if form.is_valid():
-            item = form.save(commit=False)
-            item.purchase = purchase
-            item.save()
-            messages.success(request, "Line added.")
-            return redirect("spend:purchase_detail", pk=purchase.pk)
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = ItemForm()
-
-    # Card promos that were available here, so a purchase can be checked
-    # against what was on offer - without the app holding any card of yours.
-    available = card_promos_at(purchase.place) if purchase.place else []
-
-    return render(request, "spend/purchase_detail.html", {
-        "purchase": purchase,
-        "form": form,
-        "available_promos": available,
-    })
-
-
-@login_required
-@require_POST
-def purchase_delete(request, pk: int):
-    purchase = get_object_or_404(Purchase, pk=pk)
-    purchase.delete()
-    messages.success(request, "Purchase deleted.")
-    return redirect("spend:purchases")
-
-
-@login_required
-@require_POST
-def item_wear(request, pk: int):
-    """Record one more wearing. The whole cost-per-wear loop is this button."""
-    item = get_object_or_404(PurchaseItem, pk=pk)
-    item.wears += 1
-    item.save(update_fields=["wears"])
-
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/") and not next_url.startswith("//"):
-        return redirect(next_url)
-    return redirect("spend:wardrobe")
-
-
-@login_required
-@module("spend_wardrobe", "Wardrobe")
-def wardrobe_screen(request):
-    return render(request, "spend/wardrobe.html", {
-        "items": wardrobe(),
-        "summary": wardrobe_summary(),
-    })
-
-
-@login_required
-@require_GET
-@module("spend_promos", "Promos")
-def promos(request):
-    """A read-only view of what the issuers published.
-
-    Nothing here is hand-entered. The importer keys on (issuer, source_ref), so
-    anything typed or deleted here would be overwritten by the next refresh
-    anyway.
-    """
-    category = request.GET.get("category", "")
-    if category not in SpendCategory.values:
-        category = ""
-
-    # Merchant promos only. Card promos have their own screen, with a pager -
-    # letting all 675 of them through here rendered the same list twice, once
-    # unpaged.
-    live = live_promos(category=category, card_promos=False)
-
-    return render(request, "spend/promos.html", {
-        "live": live,
-        "expiring": expiring_promos(card_promos=False),
-        "stale": stale_promos(card_promos=False),
-        "expired": [
-            p for p in Promo.objects.filter(issuer="") if not p.is_live
-        ][:20],
-        "categories": SpendCategory.choices,
-        "category": category,
-        "card_promo_count": len(live_promos(card_promos=True)),
-    })
+def _promo_rows(promos) -> list[dict]:
+    return [
+        {
+            "promo": p, "title": p.title, "issuer": p.issuer, "brand": p.brand,
+            "card_name": p.card_name,
+            "discount": p.discount_pct or p.price or 0,
+            "ends_on": p.ends_on,
+        }
+        for p in promos
+    ]
 
 
 @login_required
@@ -188,34 +52,17 @@ def card_promos(request):
     category = request.GET.get("category", "")
     if category not in SpendCategory.values:
         category = ""
+    search = request.GET.get("q", "").strip()
 
-    live = live_promos(category=category, issuer=issuer, card_promos=True)
+    live = live_promos(category=category, issuer=issuer, card_promos=True,
+                       search=search)
 
-    # Paginated like every other list in the app. One bank alone publishes 667
-    # live promos, and rendering them all was a 667-row table - the exact thing
+    # Paginated like every other list in the app. Six banks publish over 900
+    # live promos between them, and rendering them all was the exact thing
     # server-side paging exists to avoid.
-    columns = [
-        Column("title", "Offer", order_by=("title",)),
-        Column("issuer", "Bank", order_by=("issuer",)),
-        Column("brand", "Where", order_by=("brand",)),
-        Column("card_name", "Qualifying card", order_by=("card_name",)),
-        Column("discount", "Offer", order_by=("discount_pct",), align="right"),
-        Column("ends_on", "Ends", order_by=("ends_on",)),
-    ]
     table = build_list_table(
-        request,
-        [
-            {
-                "promo": p, "title": p.title, "issuer": p.issuer,
-                "brand": p.brand, "card_name": p.card_name,
-                "discount": p.discount_pct or p.price or 0,
-                "ends_on": p.ends_on,
-            }
-            for p in live
-        ],
-        columns,
-        default_sort="ends_on",
-        preserve=("issuer", "category"),
+        request, _promo_rows(live), _promo_columns(bank=True),
+        default_sort="ends_on", preserve=("issuer", "category", "q"),
     )
 
     return render(request, "spend/card_promos.html", {
@@ -226,6 +73,7 @@ def card_promos(request):
         "issuer": issuer,
         "categories": SpendCategory.choices,
         "category": category,
+        "search": search,
         "expiring": [p for p in live if p.days_left is not None and p.days_left <= 7],
         "undated": [p for p in live if p.undated],
     })
@@ -234,12 +82,7 @@ def card_promos(request):
 @login_required
 @module("spend_where", "Where to buy")
 def where(request):
-    """Nearest places that sell what you are after, and what is known there.
-
-    Ordered by distance, not price. Ranking by price would imply the app knows
-    what each shop charges, and outside fuel it does not - so it leads with
-    what it does know and shows the gaps as gaps.
-    """
+    """Nearest places that sell what you are after, and what is known there."""
     category = request.GET.get("category", "")
     if category not in CATEGORY_KINDS:
         category = SpendCategory.GROCERY
@@ -267,86 +110,3 @@ def where(request):
         "priced": [o for o in options if o.has_price],
         "with_promos": [o for o in options if o.promos],
     })
-
-
-@login_required
-@module("spend_products", "Products")
-def products(request):
-    if request.method == "POST":
-        form = ProductForm(request.POST)
-        if form.is_valid():
-            product = form.save()
-            messages.success(request, f"Tracking {product.label}.")
-            return redirect("spend:product_detail", pk=product.pk)
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = ProductForm(initial={"brand": request.GET.get("brand", "")})
-
-    tracked = Product.objects.prefetch_related("quotes")
-    for product in tracked:
-        quotes = list(product.quotes.all())
-        product.quote_count = len(quotes)
-        trusted = [q for q in quotes if q.is_trusted and q.in_stock]
-        product.best_trusted = min(trusted, key=lambda q: q.price) if trusted else None
-
-    return render(request, "spend/products.html", {
-        "products": tracked,
-        "form": form,
-    })
-
-
-@login_required
-@module("spend_products", "Product")
-def product_detail(request, pk: int):
-    product = get_object_or_404(Product.objects.prefetch_related("quotes"), pk=pk)
-    request.page_title = product.label
-
-    if request.method == "POST":
-        form = ProductPriceForm(request.POST, product=product)
-        if form.is_valid():
-            quote = form.save(commit=False)
-            quote.product = product
-            quote.save()
-            messages.success(request, "Price recorded.")
-            return redirect("spend:product_detail", pk=product.pk)
-        messages.error(request, "Check the highlighted fields.")
-    else:
-        form = ProductPriceForm(product=product)
-
-    from .products import Quote, best_trusted, cheapest_overall, lookalike_warning, rank_quotes
-
-    quotes = [
-        Quote(
-            seller=q.seller, url=q.url, price=q.price, trust=q.trust,
-            seen_on=q.seen_on, in_stock=q.in_stock, size=q.size,
-            warning=lookalike_warning(q.url, product.brand),
-        )
-        for q in product.quotes.all()
-    ]
-    ranked = rank_quotes(quotes)
-    trusted = best_trusted(quotes)
-    cheapest = cheapest_overall(quotes)
-
-    return render(request, "spend/product_detail.html", {
-        "product": product,
-        "form": form,
-        "quotes": ranked,
-        "best_trusted": trusted,
-        "cheapest": cheapest,
-        # The case worth naming: the cheapest listing is not one you can trust.
-        "cheapest_is_untrusted": (
-            cheapest is not None and trusted is not None
-            and cheapest.price < trusted.price and not cheapest.is_trusted
-        ),
-        "warnings": [q.warning for q in quotes if q.warning],
-        "stale": [q for q in product.quotes.all() if q.is_stale],
-    })
-
-
-@login_required
-@require_POST
-def product_delete(request, pk: int):
-    product = get_object_or_404(Product, pk=pk)
-    product.delete()
-    messages.success(request, "Stopped tracking.")
-    return redirect("spend:products")

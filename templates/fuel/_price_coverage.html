@@ -18,13 +18,11 @@
     <p class="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-300">
       {% if coverage.has_any_advisory %}
         Stations are falling back to the week of
-        {{ coverage.latest_advisory.week_of|date:"d M Y" }}, which is labelled
-        <em>Estimated</em> rather than passed off as current. Entering this week
-        takes about a minute.
+        {{ coverage.latest_advisory.week_of|date:"d M Y" }} rather than being
+        passed off as current. Entering this week takes about a minute.
       {% else %}
-        A station gets a price from one of two places: a fill-up you logged there,
-        or the DOE weekly advisory for its brand and region. Neither exists yet, so
-        the honest answer for all
+        A station gets a price from either a price board note or the DOE weekly
+        advisory for its brand and region. Neither exists yet, so the honest answer for all
         <strong>{{ coverage.stations }}</strong> of them is "no price".
         <strong>Entering one week of advisory prices prices every single one.</strong>
       {% endif %}
@@ -33,9 +31,6 @@
     <div class="mt-3 flex flex-wrap gap-2">
       <a href="{% url 'fuel:advisory' %}" class="btn-primary btn-sm">
         Enter this week&rsquo;s prices
-      </a>
-      <a href="{% url 'fuel:fillup_create' %}" class="btn-ghost btn-sm">
-        Or log a fill-up
       </a>
     </div>
 
@@ -69,9 +64,9 @@
         on a 40-litre tank.
       </p>
       <p class="mt-2 text-[12px] leading-relaxed text-ink-muted dark:text-slate-500">
-        Stations show the median of that survey, which is why they read
-        <em>Estimated</em> rather than a price for that pump. Log a fill-up and the
-        station you actually use starts carrying a real one.
+        Stations show the median of that survey, which is why they read as a
+        regional price rather than a price for that pump. A price board note
+        makes the station you actually use carry a real one.
         {% if coverage.band.source_note %}Survey: {{ coverage.band.source_note }}.{% endif %}
       </p>
     </div>

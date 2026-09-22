@@ -37,6 +37,10 @@ class Quote:
 
     @property
     def tier_label(self) -> str:
+        if self.tier == PriceTier.ESTIMATED:
+            if self.detail.startswith("Your last price"):
+                return "Older noted price"
+            return "Regional price"
         return PriceTier(self.tier).label
 
     @property
@@ -67,8 +71,8 @@ def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
 
     (3) deliberately outranks (4). Pump prices move every Tuesday, so a
     three-week-old receipt from the right station is usually further off than
-    this week's number for the wrong brand - and both are labelled Estimated,
-    so neither is being passed off as fact.
+    this week's number for the wrong brand. Both remain visibly distinct from a
+    current station-specific price.
     """
     places = list(places)
     if not places:

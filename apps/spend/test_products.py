@@ -11,9 +11,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib.auth.models import User
 from django.test import TestCase
-from django.urls import reverse
 from django.utils import timezone
 
 from .models import Product, ProductPrice
@@ -154,84 +152,3 @@ class ProductModelTests(TestCase):
         )
         self.assertTrue(old.is_stale)
         self.assertFalse(fresh.is_stale)
-
-
-class ProductScreenTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user("shopper", password="not-a-real-password")
-        self.client.force_login(self.user)
-        self.product = Product.objects.create(
-            brand="Salomon", model="XT-6", variant="Gore-Tex",
-            target_price=Decimal("11000"),
-        )
-
-    def test_screens_render_empty(self):
-        self.assertEqual(self.client.get(reverse("spend:products")).status_code, 200)
-        self.assertEqual(
-            self.client.get(
-                reverse("spend:product_detail", args=[self.product.pk])
-            ).status_code,
-            200,
-        )
-
-    def test_the_screen_warns_about_a_lookalike_domain(self):
-        ProductPrice.objects.create(
-            product=self.product, seller="Salomo Philippines",
-            url="https://www.salomophilippines.com/xt6",
-            price=Decimal("5999"), trust=ProductPrice.Trust.UNVERIFIED,
-        )
-        response = self.client.get(
-            reverse("spend:product_detail", args=[self.product.pk])
-        )
-        self.assertEqual(len(response.context["warnings"]), 1)
-        self.assertContains(response, "before buying")
-
-    def test_a_cheap_untrusted_listing_is_called_out_not_recommended(self):
-        ProductPrice.objects.create(
-            product=self.product, seller="Salomon PH",
-            url="https://ph.salomon.com/products/xt-6-gore-tex",
-            price=Decimal("12990"), trust=ProductPrice.Trust.OFFICIAL,
-        )
-        ProductPrice.objects.create(
-            product=self.product, seller="Dodgy Deals",
-            price=Decimal("5999"), trust=ProductPrice.Trust.UNVERIFIED,
-        )
-        response = self.client.get(
-            reverse("spend:product_detail", args=[self.product.pk])
-        )
-
-        self.assertTrue(response.context["cheapest_is_untrusted"])
-        self.assertEqual(response.context["best_trusted"].seller, "Salomon PH")
-        self.assertContains(response, "not one you have verified")
-
-    def test_pasting_the_brands_own_link_marks_it_official(self):
-        self.client.post(
-            reverse("spend:product_detail", args=[self.product.pk]),
-            {
-                "seller": "Salomon PH",
-                "url": "https://ph.salomon.com/products/xt-6-gore-tex",
-                "price": "12990", "trust": ProductPrice.Trust.UNVERIFIED,
-                "seen_on": timezone.localdate().isoformat(), "in_stock": "on",
-            },
-        )
-        self.assertEqual(ProductPrice.objects.get().trust,
-                         ProductPrice.Trust.OFFICIAL)
-
-    def test_the_app_never_upgrades_an_unknown_seller_on_its_own(self):
-        self.client.post(
-            reverse("spend:product_detail", args=[self.product.pk]),
-            {
-                "seller": "Some Sneaker Shop",
-                "url": "https://sneakershop.ph/salomon-xt6",
-                "price": "9500", "trust": ProductPrice.Trust.UNVERIFIED,
-                "seen_on": timezone.localdate().isoformat(), "in_stock": "on",
-            },
-        )
-        self.assertEqual(ProductPrice.objects.get().trust,
-                         ProductPrice.Trust.UNVERIFIED)
-
-    def test_signed_out_users_reach_nothing(self):
-        self.client.logout()
-        response = self.client.get(reverse("spend:products"))
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])

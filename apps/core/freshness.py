@@ -65,13 +65,13 @@ SOURCES: tuple[Source, ...] = (
         note="The DA publishes on weekdays, often late in the day.",
     ),
     Source(
-        key="promos_metrobank",
+        key="promos_banks",
         name="Card promos",
-        command="import_bank_promos --bank metrobank",
+        command="import_bank_promos --bank all",
         cadence="Weekly",
         due_after_hours=24 * 8,
         stale_after_hours=24 * 30,
-        note="Banks add promos continuously; a weekly pull keeps up.",
+        note="Six issuers publish readably; the other eleven do not.",
     ),
     Source(
         key="places_osm",

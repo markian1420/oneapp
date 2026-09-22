@@ -46,7 +46,7 @@
             </td>
             <td class="text-right mono">{{ commodity.movement.points }}</td>
             <td class="whitespace-nowrap text-right">
-              <a href="{% url 'spend:where' %}?category=grocery&q={{ commodity.name|urlencode }}"
+              <a href="{% url 'grocery:map' %}?item={{ commodity.name|urlencode }}"
                  class="btn-ghost btn-sm">Where to buy</a>
             </td>
           </tr>

@@ -92,8 +92,7 @@
             <th>Place</th>
             <th class="text-right">Distance</th>
             <th class="text-right">You paid</th>
-            <th>Promos running</th>
-            <th></th>
+            <th>Card promos</th>
           </tr>
         </thead>
         <tbody>
@@ -139,13 +138,9 @@
                   {% endif %}
                 {% else %}
                   <span class="text-[12px] text-ink-muted dark:text-slate-500">
-                    nothing naming this brand
+                    no card offer naming this brand
                   </span>
                 {% endif %}
-              </td>
-              <td class="whitespace-nowrap text-right">
-                <a href="{% url 'spend:purchase_create' %}?place={{ option.place.pk }}"
-                   class="btn-ghost btn-sm">Log a buy</a>
               </td>
             </tr>
           {% endfor %}
@@ -156,9 +151,9 @@
     {% with general=options.0.general_promos %}
       {% if general %}
         <div class="panel panel-pad mt-5">
-          <p class="eyebrow">Running everywhere in this category</p>
+        <p class="eyebrow">Card offers in this category</p>
           <p class="mt-2 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-            {{ general|length }} offer{{ general|pluralize }} that apply at any
+            {{ general|length }} card offer{{ general|pluralize }} that apply at any
             {{ category }} place, so they are no reason to pick one over another.
             Listed here once rather than against every row.
           </p>
@@ -189,7 +184,7 @@
           </dd>
         </div>
         <div>
-          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">With a promo running</dt>
+          <dt class="text-[13px] font-bold text-ink-soft dark:text-slate-300">With a card promo</dt>
           <dd class="mono text-lg font-black {% if with_promos %}text-brand-700 dark:text-brand-400{% else %}text-ink-muted dark:text-slate-500{% endif %}">
             {{ with_promos|length }}
           </dd>
@@ -197,9 +192,8 @@
       </dl>
       {% if not priced %}
         <p class="mt-3 text-[13px] leading-relaxed text-ink-soft dark:text-slate-400">
-          No prices of your own yet, so the middle column is empty everywhere. One
-          logged basket with its lines fills it in for that shop permanently, and the
-          second one lets this screen actually compare.
+          No prices of your own yet, so the middle column is empty everywhere.
+          Existing receipt history will appear here when it is available.
         </p>
       {% endif %}
     </div>

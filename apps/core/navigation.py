@@ -24,20 +24,13 @@ class Module:
 MODULES: tuple[Module, ...] = (
     Module("home", "Overview", "layout-dashboard", "core:home", ""),
     Module("insights", "Today", "sparkles", "insights:briefing", ""),
-    Module("places_map", "Map", "map", "places:map", ""),
     Module("places_calibration", "Where am I", "locate", "places:calibration", ""),
     Module("fuel_map", "Fuel map", "fuel", "fuel:map", "Fuel"),
-    Module("fuel_stations", "Stations", "map-pin", "fuel:stations", "Fuel"),
-    Module("fuel_fillups", "Fill-ups", "receipt", "fuel:fillups", "Fuel"),
     Module("fuel_advisory", "DOE advisory", "scroll-text", "fuel:advisory", "Fuel"),
-    Module("fuel_vehicles", "Vehicles", "car", "fuel:vehicles", "Fuel"),
+    Module("grocery_map", "Grocery map", "map", "grocery:map", "Grocery"),
     Module("grocery_prices", "Commodity prices", "basket", "grocery:commodities", "Grocery"),
-    Module("spend_where", "Where to buy", "basket", "spend:where", "Spend"),
-    Module("spend_purchases", "Spending", "receipt", "spend:purchases", "Spend"),
-    Module("spend_promos", "Merchant promos", "tag", "spend:promos", "Spend"),
-    Module("spend_card_promos", "Card promos", "credit-card", "spend:card_promos", "Spend"),
-    Module("spend_products", "Product watch", "tag", "spend:products", "Spend"),
-    Module("spend_wardrobe", "Wardrobe", "shirt", "spend:wardrobe", "Spend"),
+    Module("spend_where", "Where to buy", "basket", "spend:where", "Shopping"),
+    Module("spend_card_promos", "Card promos", "credit-card", "spend:card_promos", "Shopping"),
 )
 
 
