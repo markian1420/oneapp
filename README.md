@@ -348,6 +348,14 @@ Everything comes from the environment. Beyond the values in `.env.example`:
 | `DJANGO_STATIC_MANIFEST` | `True` | Hashed static filenames; the image runs `collectstatic` at build time |
 | `DJANGO_SECURE_SSL_REDIRECT` | `True` | Redirect plain HTTP |
 | `DJANGO_TRUST_PROXY_SSL_HEADER` | `True` | Read the original scheme from `X-Forwarded-Proto`. Only correct behind a TLS-terminating proxy - without one, a client can claim HTTPS |
+| `MAINTENANCE_SCREENS` | Navigation codes | Screens that answer with a maintenance page instead of running. Empty by default |
+
+A parked screen is listed by its navigation code from `apps/core/navigation.py`,
+comma-separated. The check sits in the `module` decorator every screen already
+wears, so a parked screen runs no queries, and the sidebar marks the row rather
+than leaving a dead link. The deployment currently parks `spend_where`, which
+needs place data it does not have yet; deleting that line in `render.yaml`
+brings it back.
 
 `RENDER_EXTERNAL_HOSTNAME` is set by the platform, and settings add it to
 `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`, so a rename does not need an edit.

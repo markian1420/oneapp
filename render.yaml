@@ -31,3 +31,7 @@ services:
         value: "True"
       - key: DJANGO_LOG_LEVEL
         value: INFO
+      # Where to buy leans on place data this deployment does not have yet.
+      # Parked here rather than removed, so it returns by deleting this line.
+      - key: MAINTENANCE_SCREENS
+        value: spend_where

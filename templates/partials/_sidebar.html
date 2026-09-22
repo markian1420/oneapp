@@ -48,6 +48,11 @@
               {% include "partials/_icon.html" with name=module.icon class="h-4 w-4" %}
             </span>
             <span class="truncate">{{ module.name }}</span>
+            {% if module.code in maintenance_screens %}
+              <span class="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px]
+                           font-bold uppercase tracking-wide text-amber-700
+                           dark:bg-amber-500/15 dark:text-amber-300">Paused</span>
+            {% endif %}
           </a>
         {% endfor %}
       </div>

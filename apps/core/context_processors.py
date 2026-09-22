@@ -1,5 +1,7 @@
 """Sidebar state available to every template."""
 
+from django.conf import settings
+
 from .navigation import grouped_modules
 
 
@@ -15,4 +17,5 @@ def navigation(request):
         # apps.core.views.module.
         "current_module": getattr(request, "current_module", ""),
         "page_title": getattr(request, "page_title", ""),
+        "maintenance_screens": settings.MAINTENANCE_SCREENS,
     }

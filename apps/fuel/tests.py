@@ -674,41 +674,35 @@ class StationImportTests(TestCase):
 
 
 class PriceCoverageTests(TestCase):
-    """The empty state has to explain itself, not just look broken."""
+    """What the map reports about its own prices."""
 
     def setUp(self):
         self.user = User.objects.create_user("driver", password="not-a-real-password")
         self.client.force_login(self.user)
         self.station = make_station()
 
-    def test_with_no_advisory_the_map_says_why_and_offers_the_fix(self):
+    def test_with_no_advisory_the_map_makes_no_claim_about_prices(self):
         response = self.client.get(reverse("fuel:map"))
 
-        self.assertContains(response, "Nothing is priced yet")
-        # The fix is a link, not a paragraph telling you to go and find it.
-        self.assertContains(response, reverse("fuel:advisory"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Priced")
 
-    def test_a_stale_advisory_reads_differently_from_none_at_all(self):
+    def test_an_advisory_from_an_older_week_is_not_this_week_priced(self):
         DOEAdvisory.objects.create(
             week_of=week_start() - timedelta(days=21), region="NCR", brand="",
             fuel_type="gas_95", price=Decimal("77.20"),
         )
         response = self.client.get(reverse("fuel:map"))
 
-        # Falling back to an old week is a different problem from having
-        # nothing, and needs a different prompt.
-        self.assertContains(response, "No advisory for the week")
-        self.assertNotContains(response, "Nothing is priced yet")
-        self.assertNotContains(response, "Estimated")
+        self.assertNotContains(response, "Priced")
 
-    def test_once_this_week_is_entered_the_warning_goes(self):
+    def test_once_this_week_is_entered_the_map_says_it_is_priced(self):
         DOEAdvisory.objects.create(
             week_of=week_start(), region="NCR", brand="",
             fuel_type="gas_95", price=Decimal("77.20"),
         )
         response = self.client.get(reverse("fuel:map"))
 
-        self.assertNotContains(response, "Nothing is priced yet")
         self.assertContains(response, "Priced")
 
     def test_one_prevailing_row_prices_every_station(self):

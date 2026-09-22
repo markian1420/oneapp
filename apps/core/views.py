@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.utils import timezone
@@ -22,6 +23,10 @@ def module(code: str, title: str):
     Stamps the request so the sidebar highlights the right row, and supplies
     the page title, which the topbar reads. Doing it here means a new screen
     cannot forget one and silently render with no active nav row.
+
+    It is also where a parked screen stops: MAINTENANCE_SCREENS is checked
+    before the view runs, so a screen taken offline does no work and cannot
+    half-render off data it was told not to trust.
     """
 
     def decorator(view):
@@ -29,6 +34,8 @@ def module(code: str, title: str):
         def wrapper(request, *args, **kwargs):
             request.current_module = code
             request.page_title = title
+            if code in settings.MAINTENANCE_SCREENS:
+                return render(request, "core/maintenance.html", status=503)
             return view(request, *args, **kwargs)
 
         return wrapper

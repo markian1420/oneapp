@@ -203,6 +203,16 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # --------------------------------------------------------------------------
+# Screens taken offline
+# --------------------------------------------------------------------------
+# Navigation codes - see apps.core.navigation - that should answer with a
+# maintenance page instead of their own view. Driven from the environment so a
+# deployment can park a screen that its data cannot yet support while the same
+# screen stays open locally, where the work to fix it happens.
+
+MAINTENANCE_SCREENS = env.list("MAINTENANCE_SCREENS", default=[])
+
+# --------------------------------------------------------------------------
 # Fuel module
 # --------------------------------------------------------------------------
 

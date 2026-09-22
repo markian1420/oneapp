@@ -57,15 +57,9 @@ def _fuel_choice(request, default: str = "") -> str:
 
 
 def price_coverage() -> dict:
-    """Why stations do or do not have a price yet.
-
-    Every station showing "No price" is the correct answer to an empty
-    database, but on its own it reads as a broken map rather than a one-minute
-    task. This gives the screens enough to say which of the two it is.
-    """
+    """How much of the map is priced, and from what."""
     week = week_start()
     advisory_rows = DOEAdvisory.objects.filter(week_of=week).count()
-    latest = DOEAdvisory.objects.order_by("-week_of").first()
 
     band = (
         DOEAdvisory.objects.filter(week_of=week, brand="", low__isnull=False)
@@ -77,14 +71,10 @@ def price_coverage() -> dict:
         "week": week,
         "band": band,
         "advisory_rows": advisory_rows,
-        "latest_advisory": latest,
         "logged_places": (
             PriceObservation.objects.values("place_id").distinct().count()
         ),
         "stations": fuel_places().count(),
-        # The distinction that matters: nothing at all, versus something out
-        # of date. They need different prompts.
-        "has_any_advisory": latest is not None,
     }
 
 

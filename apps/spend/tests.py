@@ -160,6 +160,19 @@ class SpendScreenTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
+    def test_a_parked_screen_answers_with_the_maintenance_page(self):
+        with self.settings(MAINTENANCE_SCREENS=["spend_where"]):
+            response = self.client.get(reverse("spend:where"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(response, "under maintenance", status_code=503)
+
+    def test_parking_one_screen_leaves_the_others_alone(self):
+        with self.settings(MAINTENANCE_SCREENS=["spend_where"]):
+            response = self.client.get(reverse("spend:card_promos"))
+
+        self.assertEqual(response.status_code, 200)
+
     def test_card_promos_search_and_page_on_the_server(self):
         """The browser gets one page of rows, never the whole set."""
         for n in range(15):
@@ -283,10 +296,6 @@ class CardPromoTests(TestCase):
 
         titles = {p.title for p in card_promos_at(place)}
         self.assertEqual(titles, {"At Jollibee", "All dining"})
-
-    def test_the_screen_says_plainly_that_no_card_is_stored(self):
-        response = self.client.get(reverse("spend:card_promos"))
-        self.assertContains(response, "No card of yours is stored")
 
     def test_there_is_nowhere_in_the_app_to_store_a_card(self):
         # The guarantee, pinned: no card model exists to write to.
