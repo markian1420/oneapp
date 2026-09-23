@@ -356,7 +356,11 @@ the database, which many office networks refuse - see Troubleshooting.
 ### The scheduled refresh
 
 `refresh-data.yml` runs `manage.py refresh_all --due-only --strict` twice a day,
-at 07:00 and 19:00 Manila time. `--due-only` means a source that is still
+at 07:00 and 19:00 Manila time. Each source declares how long it stays current,
+and that window has to be shorter than the gap between runs: a daily source
+marked current for 36 hours is skipped by every other pass and ends up
+refreshing every second day, which for the DA index means a hole in the history
+that nothing later fills. `--due-only` means a source that is still
 current costs nothing, and `--strict` makes a failed source fail the run, so
 GitHub emails about a feed that has gone quiet instead of the data silently
 ageing. The overview screen shows the same staleness from the other side.

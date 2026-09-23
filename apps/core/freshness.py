@@ -21,6 +21,12 @@ from datetime import timedelta
 from django.utils import timezone
 
 
+# A note on due_after_hours: it has to be shorter than the gap between runs,
+# or a daily source is skipped by every other scheduled pass and refreshes at
+# half the rate it publishes. The schedule runs twice a day, so twenty hours
+# means the morning pass always finds yesterday's edition waiting.
+
+
 @dataclass(frozen=True)
 class Source:
     """One upstream feed and how often it really publishes."""
@@ -42,7 +48,7 @@ SOURCES: tuple[Source, ...] = (
         name="Fuel, per-brand averages",
         command="import_metrofuel",
         cadence="Daily",
-        due_after_hours=36,
+        due_after_hours=20,
         stale_after_hours=24 * 5,
         note="MetroFuel Tracker recomputes daily from reported prices.",
     ),
@@ -51,7 +57,7 @@ SOURCES: tuple[Source, ...] = (
         name="Fuel, per-station survey",
         command="import_gaswatch",
         cadence="Daily",
-        due_after_hours=36,
+        due_after_hours=20,
         stale_after_hours=24 * 10,
         note="A price per station for most of Metro Manila, plus a regional "
              "median for the stations it cannot be matched to.",
@@ -61,9 +67,11 @@ SOURCES: tuple[Source, ...] = (
         name="Grocery commodity index",
         command="import_da_prices",
         cadence="Weekdays",
-        due_after_hours=24 * 2,
+        due_after_hours=20,
         stale_after_hours=24 * 5,
-        note="The DA publishes on weekdays, often late in the day.",
+        note="The DA publishes on weekdays, often late in the day. Asked for "
+             "daily: a weekday edition missed is a gap in the history that "
+             "nothing later fills, and a weekend ask costs one skipped fetch.",
     ),
     Source(
         key="promos_banks",
