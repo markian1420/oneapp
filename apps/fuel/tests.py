@@ -502,11 +502,17 @@ class ScreenSmokeTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_signed_out_users_read_every_screen(self):
+    def test_signed_out_users_read_the_public_screens(self):
         self.client.logout()
-        for name in ("core:home", "fuel:map", "fuel:advisory"):
+        for name in ("core:home", "fuel:map"):
             with self.subTest(screen=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_the_advisory_is_not_among_them(self):
+        # It is the entry screen for the week's prices, not something the app
+        # publishes, so it answers with the login rather than the page.
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("fuel:advisory")).status_code, 302)
 
 
 class AdvisoryImportTests(TestCase):

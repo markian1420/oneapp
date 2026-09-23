@@ -31,7 +31,7 @@ class NavigationTests(TestCase):
         self.assertEqual(len(codes), len(set(codes)))
 
     def test_grouping_follows_declaration_order(self):
-        groups = grouped_modules()
+        groups = grouped_modules(include_private=True)
         flattened = [m.code for g in groups for m in g["modules"]]
         self.assertEqual(flattened, [m.code for m in MODULES])
 
@@ -84,7 +84,6 @@ class PublicAccessTests(TestCase):
             reverse("core:home"),
             reverse("insights:briefing"),
             reverse("fuel:map"),
-            reverse("fuel:advisory"),
             reverse("fuel:station_detail", args=[self.station.pk]),
             reverse("grocery:map"),
             reverse("grocery:commodities"),
@@ -119,6 +118,28 @@ class PublicAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response.url)
         self.assertEqual(PriceObservation.objects.count(), 0)
+
+    def test_the_advisory_screen_is_not_public_at_all(self):
+        # Not merely read-only to a visitor: it is where the week's prices are
+        # typed in, and it is not part of what the app publishes.
+        response = self.client.get(reverse("fuel:advisory"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
+    def test_the_sidebar_does_not_offer_a_screen_that_would_refuse_them(self):
+        response = self.client.get(reverse("core:home"))
+
+        self.assertNotContains(response, reverse("fuel:advisory"))
+        self.assertContains(response, "Fuel map")
+
+    def test_the_advisory_is_in_the_sidebar_once_signed_in(self):
+        User.objects.create_user("curator", password="not-a-real-password")
+        self.client.login(username="curator", password="not-a-real-password")
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, reverse("fuel:advisory"))
 
     def test_writing_an_advisory_without_an_account_is_sent_to_the_login(self):
         response = self.client.post(reverse("fuel:advisory"), {

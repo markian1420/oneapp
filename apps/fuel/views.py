@@ -275,7 +275,9 @@ def station_favorite(request, pk: int):
     return redirect("fuel:station_detail", pk=station.pk)
 
 
-@editing_requires_login
+# Not a public screen: it is where the weekly prices are typed in, and a
+# visitor reading the app has no use for the form or the entry history.
+@login_required
 @module("fuel_advisory", "DOE advisory")
 def advisory(request):
     if request.method == "POST":

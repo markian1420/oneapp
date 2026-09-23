@@ -19,6 +19,10 @@ class Module:
     icon: str
     url_name: str
     group: str
+    # A screen for whoever keeps the data, not for whoever reads it. Kept out
+    # of the sidebar unless someone is signed in, because a row that answers
+    # with a login page is a dead end for everyone else.
+    private: bool = False
 
 
 MODULES: tuple[Module, ...] = (
@@ -26,7 +30,8 @@ MODULES: tuple[Module, ...] = (
     Module("insights", "Today", "sparkles", "insights:briefing", ""),
     Module("places_calibration", "Where am I", "locate", "places:calibration", ""),
     Module("fuel_map", "Fuel map", "fuel", "fuel:map", "Fuel"),
-    Module("fuel_advisory", "DOE advisory", "scroll-text", "fuel:advisory", "Fuel"),
+    Module("fuel_advisory", "DOE advisory", "scroll-text", "fuel:advisory", "Fuel",
+           private=True),
     Module("grocery_map", "Grocery map", "map", "grocery:map", "Grocery"),
     Module("grocery_prices", "Commodity prices", "basket", "grocery:commodities", "Grocery"),
     Module("spend_where", "Where to buy", "basket", "spend:where", "Shopping"),
@@ -34,15 +39,20 @@ MODULES: tuple[Module, ...] = (
 )
 
 
-def grouped_modules() -> list[dict]:
+def grouped_modules(include_private: bool = False) -> list[dict]:
     """Consecutive runs of the same group, in declaration order.
 
     Grouping by consecutive run rather than by collecting everything with a
     matching name keeps the tuple above the single source of truth for order:
     a module sits where it is written, and its heading follows it.
+
+    A group whose every module is private disappears with them, heading and
+    all, rather than leaving an empty label behind.
     """
+    modules = [m for m in MODULES if include_private or not m.private]
+
     groups: list[dict] = []
-    for module in MODULES:
+    for module in modules:
         if groups and groups[-1]["name"] == module.group:
             groups[-1]["modules"].append(module)
         else:

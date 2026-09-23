@@ -12,10 +12,12 @@
     {% include "partials/_icon.html" with name="map" class="h-4 w-4" %}
     <span class="hidden sm:inline">Station map</span>
   </a>
-  <a href="{% url 'fuel:advisory' %}" class="btn-primary btn-sm">
-    {% include "partials/_icon.html" with name="scroll-text" class="h-4 w-4" %}
-    DOE advisory
-  </a>
+  {% if user.is_authenticated %}
+    <a href="{% url 'fuel:advisory' %}" class="btn-primary btn-sm">
+      {% include "partials/_icon.html" with name="scroll-text" class="h-4 w-4" %}
+      DOE advisory
+    </a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -34,13 +36,15 @@
     <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">stations with a recent noted price</p>
   </div>
 
-  <div class="metric">
-    <p class="eyebrow">DOE advisory</p>
-    <p class="metric-value">{{ advisory_rows|intcomma }}</p>
-    <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">
-      row{{ advisory_rows|pluralize }} for week of {{ advisory_week|date:"d M" }}
-    </p>
-  </div>
+  {% if user.is_authenticated %}
+    <div class="metric">
+      <p class="eyebrow">DOE advisory</p>
+      <p class="metric-value">{{ advisory_rows|intcomma }}</p>
+      <p class="text-[12px] font-bold text-ink-muted dark:text-slate-400">
+        row{{ advisory_rows|pluralize }} for week of {{ advisory_week|date:"d M" }}
+      </p>
+    </div>
+  {% endif %}
 
   <div class="metric">
     <p class="eyebrow">Grocery readings</p>
@@ -152,6 +156,7 @@
       </dl>
     </div>
 
+    {% if user.is_authenticated %}
     <div class="panel panel-pad">
       <p class="eyebrow">DOE weekly advisory</p>
       {% if advisory_rows %}
@@ -175,6 +180,7 @@
       {% endif %}
       <a href="{% url 'fuel:advisory' %}" class="btn-ghost btn-sm mt-3">Update the advisory</a>
     </div>
+    {% endif %}
   </aside>
 </div>
 {% endblock %}

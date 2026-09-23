@@ -18,6 +18,7 @@ as different levels of confidence.
 | **Card promos** | Public bank promos, grouped and searchable by issuer/category |
 | **Today** | Compact insights from currently available grocery and card-promo data |
 | **Where am I** | Region and coverage checks for the current location |
+| DOE advisory | Where the week's prices are entered. Signed in only, and not in the public sidebar |
 
 Every screen above is public. Signing in is only needed to record something -
 a weekly advisory, a price seen at a pump - which is what keeps the numbers
@@ -415,6 +416,9 @@ catching up:
   what everyone else then reads. The rule lives in one decorator,
   `apps.core.views.editing_requires_login`, rather than in each view.
 - There are no business roles. One account curates; everyone else reads.
+- The DOE advisory screen is not public at all, rather than public and
+  read-only. It exists to type the week's prices into, and its sidebar row is
+  hidden from anyone who would only be shown a login by following it.
 
 ## Troubleshooting
 
