@@ -377,7 +377,11 @@
 
   /* Leaflet writes its own panel chrome; these pull it back into the system. */
   .leaflet-container {
-    @apply font-sans;
+    /* Leaflet numbers its own panes from 400 and its controls from 1000. Those
+       outrank the sidebar and its backdrop, so on a phone the map drew straight
+       over the open navigation. Position plus a z-index keeps that numbering
+       inside the map, where it is about panes rather than about the page. */
+    @apply relative z-0 font-sans;
   }
 
   .leaflet-popup-content-wrapper,
