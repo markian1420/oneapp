@@ -19,6 +19,22 @@ on:
           is hundreds of queries against Overpass instances that rate-limit.
         required: false
         default: ""
+      places_area:
+        description: >-
+          With only=places_osm, import these areas rather than Metro Manila -
+          space separated, e.g. "NCR PH-RIZ". Coverage stops at the boundary
+          imported, so a station one street into Rizal does not exist in the
+          app until Rizal does.
+        required: false
+        default: ""
+      places_area:
+        description: >-
+          With only=places_osm, import these areas rather than Metro Manila -
+          space separated, e.g. "NCR PH-RIZ". Coverage stops at the boundary
+          imported, so a station one street into Rizal does not exist in the
+          app until Rizal does.
+        required: false
+        default: ""
       places_kind:
         description: >-
           With only=places_osm, import just these kinds rather than all nine -
@@ -64,6 +80,8 @@ jobs:
           # script: a workflow input is untrusted text.
           ONLY: ${{ inputs.only }}
           PLACES_KIND: ${{ inputs.places_kind }}
+          PLACES_AREA: ${{ inputs.places_area }}
+          PLACES_AREA: ${{ inputs.places_area }}
         # --strict so a source that fails turns the run red and GitHub mails
         # about it. Without it a feed could be down for weeks unnoticed. A
         # hand-picked run says what it wants, so neither flag applies.
@@ -75,6 +93,12 @@ jobs:
             done
             for kind in $PLACES_KIND; do
               args="$args --places-kind $kind"
+            done
+            for area in $PLACES_AREA; do
+              args="$args --places-area $area"
+            done
+            for area in $PLACES_AREA; do
+              args="$args --places-area $area"
             done
             python manage.py refresh_all $args
           else

@@ -28,14 +28,14 @@ from apps.core.models import SourceRun
 ROUTINE = [s for s in SOURCES if s.key != "places_osm"]
 
 
-def _without_kinds(parts: list[str]) -> list[str]:
-    """The command line with every --kind and its value dropped."""
+def _without(parts: list[str], option: str) -> list[str]:
+    """The command line with every occurrence of an option and its value gone."""
     kept: list[str] = []
     skip = False
     for token in parts:
         if skip:
             skip = False
-        elif token == "--kind":
+        elif token == option:
             skip = True
         else:
             kept.append(token)
@@ -69,6 +69,14 @@ class Command(BaseCommand):
                  "Repeatable. A full import of every kind takes hours against "
                  "rate-limited public Overpass instances; one kind at a time "
                  "finishes, and the kinds already done stay done.",
+        )
+        parser.add_argument(
+            "--places-area", action="append", default=[], metavar="AREA",
+            help="Import places for these areas instead of Metro Manila. "
+                 "Repeatable. An ISO code (PH-RIZ), a province name (Rizal), "
+                 "or NCR. Station coverage stops at whatever line is imported, "
+                 "so a station one street over the boundary does not exist "
+                 "until its province does.",
         )
         parser.add_argument(
             "--strict", action="store_true",
@@ -112,10 +120,13 @@ class Command(BaseCommand):
             ok, detail, rows = True, "", 0
             try:
                 parts = source.command.split()
-                if source.key == "places_osm" and options["places_kind"]:
-                    parts = _without_kinds(parts)
-                    for kind in options["places_kind"]:
-                        parts += ["--kind", kind]
+                if source.key == "places_osm":
+                    for option, values in (("--area", options["places_area"]),
+                                           ("--kind", options["places_kind"])):
+                        if values:
+                            parts = _without(parts, option)
+                            for value in values:
+                                parts += [option, value]
                 call_command(parts[0], *parts[1:], stdout=captured,
                              stderr=captured)
                 detail = self._summarise(captured.getvalue())

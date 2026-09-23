@@ -137,10 +137,30 @@ class RefreshCommandTests(TestCase):
         self.assertIn("supermarket", args)
         self.assertNotIn("all", args)
 
+    def test_places_can_be_asked_for_outside_metro_manila(self):
+        # Coverage stops at the boundary imported: a station one street into
+        # Rizal is not in the app until Rizal is.
+        _, ran = self._run(only=["places_osm"], places_area=["PH-RIZ"])
+
+        args = list(ran.call_args.args)
+        self.assertIn("--area", args)
+        self.assertIn("PH-RIZ", args)
+        self.assertNotIn("NCR", args)
+
+    def test_places_can_be_asked_for_outside_metro_manila(self):
+        _, ran = self._run(only=["places_osm"], places_area=["PH-RIZ"])
+
+        args = list(ran.call_args.args)
+        self.assertIn("--area", args)
+        self.assertIn("PH-RIZ", args)
+        self.assertNotIn("NCR", args)
+
     def test_asking_for_no_kind_leaves_the_usual_command_alone(self):
         _, ran = self._run(only=["places_osm"])
 
-        self.assertIn("all", list(ran.call_args.args))
+        args = list(ran.call_args.args)
+        self.assertIn("all", args)
+        self.assertIn("NCR", args)
 
     def test_one_source_failing_does_not_stop_the_others(self):
         out = StringIO()

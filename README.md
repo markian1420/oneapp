@@ -360,6 +360,11 @@ running the workflow by hand with its `only` input set to `places_osm`, which
 takes that path instead of the due-source pass. Any source key works there when
 one needs catching up.
 
+The `places_area` input takes the same treatment for areas: `NCR PH-RIZ`
+imports both, and a province that is never imported has no places in the app
+however close it is. For somewhere like Pasig that matters - the stations a
+few minutes away in Cainta are in Rizal, not NCR.
+
 All nine kinds of place in one pass does not finish on a hosted runner. The
 import is hundreds of Overpass queries and the public instances rate-limit by
 address; a shared runner address is throttled far harder than a home
