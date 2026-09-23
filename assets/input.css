@@ -357,14 +357,6 @@
 
 
   /* ------------------------------------------------------------------- Map */
-  /* OpenStreetMap only publishes a light basemap. Rather than add a second
-     tile provider (another origin, another attribution, another thing that
-     can go down), the existing tiles are inverted for dark mode. Inverting
-     twice on hue keeps green space green instead of magenta. */
-  .dark .leaflet-tile-pane {
-    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
-  }
-
   .map-shell {
     @apply h-[62vh] min-h-[380px] w-full overflow-hidden
            rounded-[var(--radius-panel)] border border-slate-200/80
@@ -373,29 +365,6 @@
 
   .dark .map-shell {
     @apply border-night-line;
-  }
-
-  /* Leaflet writes its own panel chrome; these pull it back into the system. */
-  .leaflet-container {
-    /* Leaflet numbers its own panes from 400 and its controls from 1000. Those
-       outrank the sidebar and its backdrop, so on a phone the map drew straight
-       over the open navigation. Position plus a z-index keeps that numbering
-       inside the map, where it is about panes rather than about the page. */
-    @apply relative z-0 font-sans;
-  }
-
-  .leaflet-popup-content-wrapper,
-  .leaflet-popup-tip {
-    @apply rounded-[var(--radius-control)] bg-white text-ink shadow-[var(--shadow-lift)];
-  }
-
-  .dark .leaflet-popup-content-wrapper,
-  .dark .leaflet-popup-tip {
-    @apply bg-night-alt text-slate-200;
-  }
-
-  .leaflet-popup-content {
-    @apply m-0 p-3 text-sm;
   }
 
   /* Price pill markers. The tier decides the colour, so a price you logged
@@ -549,4 +518,46 @@
   .dark .kbd {
     @apply border-night-line bg-night text-slate-300;
   }
+}
+
+/* --------------------------------------------------------------- Leaflet */
+/* Deliberately outside every @layer. The map screens load Leaflet's own
+   stylesheet as a plain <link>, and unlayered CSS wins against anything in a
+   layer however specific it is - which is why the dark popup stayed white
+   while its text turned white with it. These sit in the same unlayered space
+   as the rules they are correcting, so ordinary specificity decides. */
+
+/* The basemap is published light; inverting the tile pane keeps one tile
+   provider rather than two. Inverting twice on hue keeps green space green
+   instead of magenta. */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+}
+
+/* Leaflet numbers its own panes from 400 and its controls from 1000. Those
+   outrank the sidebar and its backdrop, so on a phone the map drew straight
+   over the open navigation. Position plus a z-index keeps that numbering
+   inside the map, where it is about panes rather than about the page. */
+.leaflet-container {
+  @apply relative z-0 font-sans;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  @apply rounded-[var(--radius-control)] bg-white text-ink shadow-[var(--shadow-lift)];
+}
+
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+  @apply bg-night-alt text-slate-200;
+}
+
+.leaflet-popup-content {
+  @apply m-0 p-3 text-sm;
+}
+
+/* The close button is Leaflet's own markup, and its colour is set in that
+   stylesheet too. */
+.dark .leaflet-container a.leaflet-popup-close-button {
+  @apply text-slate-400 hover:text-white;
 }
