@@ -483,6 +483,18 @@ refresh reach it perfectly well - they connect from elsewhere. Run anything
 that needs a direct connection, the initial data transfer in particular, from
 a network that permits it.
 
+**The places import spends most of its time retrying.** That is what a 504
+from Overpass means: the public instances are shared, they shed load rather
+than queue, and a hosted runner's address is throttled harder than a home
+connection. The importer rotates where each query starts so consecutive
+queries do not all queue behind the same instance, and backs off rather than
+hammering. Import a kind or two at a time and let it take as long as it takes.
+
+Every instance in `OVERPASS_ENDPOINTS` must carry planet-wide data. A national
+mirror answers a Philippine query in a second, with a valid empty result and
+no error at all - which is why an empty answer is now confirmed against a
+second instance before it is believed.
+
 **`import_places` reports that Overpass would not answer.** Public Overpass
 instances rate-limit and return 504/HTML errors under load. Re-run later or
 use a smaller area/bounding box for diagnostics.

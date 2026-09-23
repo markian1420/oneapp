@@ -10,6 +10,7 @@ for instead of from an address tag that only 13% of Philippine stations carry.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import time
 from dataclasses import dataclass
@@ -234,19 +235,29 @@ out tags center;
 """.strip()
 
 
+# Where the next call starts in the endpoint list. Without this every query
+# begins at the same instance, queues behind everyone else doing the same, and
+# only reaches a quieter mirror after a backoff it need not have paid.
+_rotation = itertools.count()
+
+
 def fetch_area(area: Area, kind: str, *, max_attempts: int = 5) -> list[dict]:
     """Run one area query, moving down the endpoint list on failure.
 
-    The public instances are shared and frequently loaded. They signal it three
-    different ways - a 429, a 504, or a 200 carrying an HTML error page - so a
-    status check alone is not enough: the body has to parse as JSON before the
-    response counts as a success.
+    The public instances are shared and frequently loaded. They signal it four
+    different ways - a 429, a 504, a 200 carrying an HTML error page, or a
+    perfectly valid empty answer because the mirror only hosts its own country.
+    That last one is the dangerous one: it is a success by every technical
+    measure and wrong by the only one that matters, so an empty answer is
+    checked against a second instance before it is believed.
     """
     endpoints = list(settings.OVERPASS_ENDPOINTS)
     last_error = ""
+    checked_empty = False
 
+    start = next(_rotation)
     for attempt in range(max_attempts):
-        endpoint = endpoints[attempt % len(endpoints)]
+        endpoint = endpoints[(start + attempt) % len(endpoints)]
         if attempt:
             # Exponential-ish backoff, capped. When Overpass says it is busy it
             # means it; retrying hard is how an IP gets blocked rather than
@@ -277,7 +288,19 @@ def fetch_area(area: Area, kind: str, *, max_attempts: int = 5) -> list[dict]:
             logger.warning("Overpass sent an error page, retrying")
             continue
 
-        return payload.get("elements", [])
+        elements = payload.get("elements", [])
+        if not elements and not checked_empty and len(endpoints) > 1:
+            # Once only: a genuinely empty area would otherwise pay the full
+            # retry schedule to confirm what the first answer already said.
+            checked_empty = True
+            last_error = f"{endpoint}: answered with nothing"
+            logger.warning(
+                "Overpass returned no %s for %s; checking another instance",
+                kind, area.name,
+            )
+            continue
+
+        return elements
 
     raise OverpassError(
         f"Overpass would not answer for {kind} in {area.name} after "

@@ -14,7 +14,7 @@ from django.urls import reverse
 
 from .brands import normalise_brand
 from .models import Place, PlaceKind
-from .overpass import KIND_SELECTORS, build_query, resolve_areas
+from .overpass import KIND_SELECTORS, build_query, fetch_area, resolve_areas
 
 
 def make_place(**overrides) -> Place:
@@ -102,6 +102,47 @@ class PlaceIdentityTests(TestCase):
             style = make_place(osm_id=100 + list(PlaceKind).index(kind), kind=kind).style
             self.assertIn("tone", style)
             self.assertIn("icon", style)
+
+
+class FetchTests(TestCase):
+    """What comes back from a public Overpass instance, and what to believe."""
+
+    class _Response:
+        def __init__(self, payload, status_code=200):
+            self._payload = payload
+            self.status_code = status_code
+
+        def json(self):
+            return self._payload
+
+    def test_an_empty_answer_is_checked_against_another_instance(self):
+        # A national mirror answers a Philippine query with a valid, empty,
+        # wrong result - 200, parseable, and nothing in it. Believing the
+        # first one would quietly import no stations and report success.
+        responses = [
+            self._Response({"elements": []}),
+            self._Response({"elements": [{"type": "node", "id": 7}]}),
+        ]
+        with mock.patch("apps.places.overpass.httpx.post",
+                        side_effect=responses) as posted:
+            elements = fetch_area(resolve_areas(["NCR"])[0], "fuel")
+
+        self.assertEqual(len(elements), 1)
+        self.assertEqual(posted.call_count, 2)
+        # And against a different instance, not the one that just said nothing.
+        first, second = (call.args[0] for call in posted.call_args_list)
+        self.assertNotEqual(first, second)
+
+    def test_an_empty_answer_confirmed_once_is_accepted(self):
+        # Somewhere genuinely has no pharmacies. Confirming it twice is enough;
+        # paying the whole retry schedule to hear it again is not.
+        responses = [self._Response({"elements": []}) for _ in range(5)]
+        with mock.patch("apps.places.overpass.httpx.post",
+                        side_effect=responses) as posted:
+            elements = fetch_area(resolve_areas(["NCR"])[0], "pharmacy")
+
+        self.assertEqual(elements, [])
+        self.assertEqual(posted.call_count, 2)
 
 
 class ImportTests(TestCase):

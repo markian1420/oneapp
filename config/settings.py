@@ -219,11 +219,15 @@ MAINTENANCE_SCREENS = env.list("MAINTENANCE_SCREENS", default=[])
 # Public Overpass endpoint used by the station importer. The main instance
 # rejects heavy queries when busy, so the importer walks the country in tiles
 # and retries against the mirrors below in order.
+# Three instances, all carrying the whole planet. A national mirror is worse
+# than useless here: overpass.osm.ch answers a Philippine query in a second,
+# with a valid empty result, because it only hosts Switzerland.
 OVERPASS_ENDPOINTS = env.list(
     "OVERPASS_ENDPOINTS",
     default=[
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
     ],
 )
 OVERPASS_TIMEOUT = env("OVERPASS_TIMEOUT")
