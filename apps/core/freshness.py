@@ -48,12 +48,13 @@ SOURCES: tuple[Source, ...] = (
     ),
     Source(
         key="fuel_gaswatch",
-        name="Fuel, regional price band",
+        name="Fuel, per-station survey",
         command="import_gaswatch",
-        cadence="Weekly",
-        due_after_hours=24 * 8,
-        stale_after_hours=24 * 15,
-        note="Derived from the DOE weekly advisory, which changes on Tuesdays.",
+        cadence="Daily",
+        due_after_hours=36,
+        stale_after_hours=24 * 10,
+        note="A price per station for most of Metro Manila, plus a regional "
+             "median for the stations it cannot be matched to.",
     ),
     Source(
         key="grocery_da",

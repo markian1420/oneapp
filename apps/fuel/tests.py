@@ -20,13 +20,23 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+import httpx
+from django.conf import settings
+from django.db.utils import IntegrityError
 from django.utils import timezone
 
 from apps.places.brands import normalise_brand
 from .forms import FillUpForm
 from apps.places.models import Place, PlaceKind
 
-from .models import DOEAdvisory, FillUp, PriceObservation, PriceTier, Vehicle
+from .models import (
+    DOEAdvisory,
+    FillUp,
+    PriceObservation,
+    PriceTier,
+    StationSurveyPrice,
+    Vehicle,
+)
 from apps.places.regions import region_for
 from .services import (
     fuel_economy,
@@ -160,15 +170,205 @@ class PriceResolutionTests(TestCase):
         quote = quotes_for([self.station], "gas_95")[self.station.pk]
         self.assertEqual(quote.tier, PriceTier.UNKNOWN)
 
-    def test_resolution_stays_at_two_queries_however_many_stations(self):
+    def test_resolution_stays_at_three_queries_however_many_stations(self):
         for index in range(25):
             make_station(osm_id=1000 + index, name=f"Station {index}")
         stations = list(Place.objects.all())
 
-        # One query for observations, one for advisories. A per-station lookup
-        # here would be a query per pin on the map.
-        with self.assertNumQueries(2):
+        # One query per source of price - observations, survey, advisories -
+        # and not one per station. A per-station lookup here would be a query
+        # per pin on the map.
+        with self.assertNumQueries(3):
             quotes_for(stations, "gas_95")
+
+
+class SurveyPriceTests(TestCase):
+    """Where a third party's price for this exact pump sits in the order."""
+
+    def setUp(self):
+        self.station = make_station(brand="Petron")
+
+    def _survey(self, price="91.70", days_old=0, fuel_type="gas_95"):
+        return StationSurveyPrice.objects.create(
+            place=self.station,
+            fuel_type=fuel_type,
+            price=Decimal(price),
+            as_of=timezone.localdate() - timedelta(days=days_old),
+            source_name="GasWatch PH survey",
+            station_label="Petron Capital Commons (Pasig)",
+        )
+
+    def test_a_survey_price_beats_the_brand_advisory(self):
+        # The whole point: this pump rather than every Petron in the region.
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="Petron",
+            fuel_type="gas_95", price=Decimal("94.90"),
+        )
+        self._survey("91.70")
+
+        quote = quotes_for([self.station], "gas_95")[self.station.pk]
+        self.assertEqual(quote.tier, PriceTier.SURVEY)
+        self.assertEqual(quote.price, Decimal("91.700"))
+        self.assertEqual(quote.tier_label, "Station survey")
+
+    def test_your_own_price_still_beats_the_survey(self):
+        self._survey("91.70")
+        PriceObservation.objects.create(
+            place=self.station, fuel_type="gas_95", price=Decimal("89.50"),
+        )
+
+        quote = quotes_for([self.station], "gas_95")[self.station.pk]
+        self.assertEqual(quote.tier, PriceTier.LOGGED)
+        self.assertEqual(quote.price, Decimal("89.500"))
+
+    def test_a_stale_survey_falls_through_to_the_advisory(self):
+        DOEAdvisory.objects.create(
+            week_of=week_start(), region="NCR", brand="Petron",
+            fuel_type="gas_95", price=Decimal("94.90"),
+        )
+        self._survey("91.70", days_old=settings.PRICE_FRESH_DAYS + 1)
+
+        quote = quotes_for([self.station], "gas_95")[self.station.pk]
+        self.assertEqual(quote.tier, PriceTier.ADVISORY)
+
+    def test_the_survey_only_answers_for_the_grade_it_covers(self):
+        self._survey("91.70", fuel_type="gas_95")
+
+        quote = quotes_for([self.station], "diesel")[self.station.pk]
+        self.assertEqual(quote.tier, PriceTier.UNKNOWN)
+
+    def test_one_row_per_station_and_grade(self):
+        self._survey("91.70")
+        with self.assertRaises(IntegrityError):
+            self._survey("92.10")
+
+
+SURVEY_SCRIPT = """
+// GasWatch PH - Fuel Price Data
+const LAST_UPDATED = "September 22, 2026";
+const GAS_STATIONS = [
+  {
+    "id": 1, "brand": "petron", "name": "Petron Capital Commons",
+    "area": "Pasig", "lat": 14.5800, "lng": 121.0600,
+    "prices": {"diesel": 102.70, "unleaded": 90.70, "premium95": 91.70,
+               "kerosene": 129.58, "egasoline": null}
+  },
+  {
+    "id": 2, "brand": "shell", "name": "Shell Marcos Hwy",
+    "area": "Pasig", "lat": 14.6200, "lng": 121.1000,
+    "prices": {"premium95": 99.89}
+  }
+];
+const GASUL_PRICES = [];
+"""
+
+
+class SurveyImportTests(TestCase):
+    """Reading the survey, and attaching it to the right forecourt."""
+
+    def setUp(self):
+        self.station = make_station(
+            brand="Petron", latitude=Decimal("14.580100"),
+            longitude=Decimal("121.060100"),
+        )
+
+    def _run(self, script=SURVEY_SCRIPT, overrides=None, **options):
+        out = StringIO()
+
+        class Response:
+            def __init__(self, text="", payload=None):
+                self.text = text
+                self._payload = payload or {}
+                self.status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._payload
+
+        def fake_get(url, **kwargs):
+            if url.endswith("data.js"):
+                return Response(text=script)
+            return Response(payload={"overrides": overrides or {}})
+
+        with mock.patch("apps.fuel.management.commands.import_gaswatch.httpx.get",
+                        side_effect=fake_get):
+            call_command("import_gaswatch", stdout=out, stderr=StringIO(), **options)
+        return out.getvalue()
+
+    def test_a_station_gets_the_price_of_the_forecourt_it_sits_on(self):
+        self._run()
+
+        row = StationSurveyPrice.objects.get(place=self.station, fuel_type="gas_95")
+        self.assertEqual(row.price, Decimal("91.700"))
+        self.assertEqual(row.as_of, date(2026, 9, 22))
+        self.assertIn("Capital Commons", row.station_label)
+
+    def test_the_grades_the_app_has_no_name_for_are_left_behind(self):
+        self._run()
+
+        grades = set(
+            StationSurveyPrice.objects.filter(place=self.station)
+            .values_list("fuel_type", flat=True)
+        )
+        self.assertEqual(grades, {"diesel", "gas_91", "gas_95"})
+
+    def test_a_survey_station_with_nothing_near_it_is_skipped(self):
+        # The Shell in the fixture is four kilometres away from anything here.
+        self._run()
+
+        self.assertEqual(
+            StationSurveyPrice.objects.exclude(place=self.station).count(), 0
+        )
+
+    def test_a_different_brand_on_the_next_corner_is_not_a_match(self):
+        self.station.brand = "Shell"
+        self.station.save(update_fields=["brand"])
+
+        self._run()
+
+        self.assertFalse(StationSurveyPrice.objects.exists())
+
+    def test_the_api_overrides_win_over_the_baked_prices(self):
+        self._run(overrides={"1": {"premium95": {"p": 93.45, "r": 0}}})
+
+        row = StationSurveyPrice.objects.get(place=self.station, fuel_type="gas_95")
+        self.assertEqual(row.price, Decimal("93.450"))
+
+    def test_losing_the_overrides_still_imports_the_baked_prices(self):
+        def fake_get(url, **kwargs):
+            if url.endswith("data.js"):
+                class Ok:
+                    text = SURVEY_SCRIPT
+                    status_code = 200
+
+                    def raise_for_status(self):
+                        return None
+                return Ok()
+            raise httpx.ConnectError("api down")
+
+        out = StringIO()
+        with mock.patch("apps.fuel.management.commands.import_gaswatch.httpx.get",
+                        side_effect=fake_get):
+            call_command("import_gaswatch", stdout=out, stderr=StringIO())
+
+        self.assertTrue(StationSurveyPrice.objects.exists())
+        self.assertIn("unavailable", out.getvalue())
+
+    def test_the_regional_median_is_still_filed(self):
+        # Two stations is under the sample floor, so nothing is written and the
+        # run says why rather than publishing a median of two.
+        output = self._run()
+        self.assertIn("readings, skipped", output)
+
+    def test_a_dry_run_writes_nothing(self):
+        self._run(dry_run=True)
+        self.assertFalse(StationSurveyPrice.objects.exists())
+
+    def test_a_changed_format_stops_the_command(self):
+        with self.assertRaises(CommandError):
+            self._run(script="const SOMETHING_ELSE = [];")
 
 
 class ScoringTests(TestCase):

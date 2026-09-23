@@ -134,14 +134,14 @@
 
   function tierClass(tier) {
     return {
-      logged: 'pin-logged', advisory: 'pin-advisory',
+      logged: 'pin-logged', survey: 'pin-survey', advisory: 'pin-advisory',
       estimated: 'pin-estimated', unknown: 'pin-unknown'
     }[tier] || 'pin-unknown';
   }
 
   function badgeClass(tier) {
     return {
-      logged: 'badge-success', advisory: 'badge-info',
+      logged: 'badge-success', survey: 'badge-survey', advisory: 'badge-info',
       estimated: 'badge-warning', unknown: 'badge-muted'
     }[tier] || 'badge-muted';
   }

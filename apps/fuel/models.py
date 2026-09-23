@@ -39,6 +39,7 @@ class PriceTier(models.TextChoices):
     """How much a price is worth trusting, best first."""
 
     LOGGED = "logged", "You paid this"
+    SURVEY = "survey", "Station survey"
     ADVISORY = "advisory", "DOE weekly advisory"
     ESTIMATED = "estimated", "Regional price"
     UNKNOWN = "unknown", "No price"
@@ -88,6 +89,59 @@ class PriceObservation(models.Model):
     @property
     def is_fresh(self) -> bool:
         return (timezone.now() - self.observed_at).days <= settings.PRICE_FRESH_DAYS
+
+
+class StationSurveyPrice(models.Model):
+    """Somebody else's price for one station and grade.
+
+    Kept apart from PriceObservation on purpose. That table means "seen
+    first-hand" - a receipt or a price board someone read - and counting a
+    survey among those would overstate how much of the map anyone has actually
+    looked at, in the one place the app promises not to.
+
+    One row per station and grade, replaced where it stands. A survey has no
+    history worth keeping: the publisher overwrites its own numbers, so
+    accumulating every version here would grow the table by thousands of rows
+    a week to preserve a record nobody can cite.
+    """
+
+    place = models.ForeignKey(
+        Place, on_delete=models.CASCADE, related_name="fuel_survey_prices"
+    )
+    fuel_type = models.CharField(max_length=20, choices=FuelType.choices)
+    price = models.DecimalField(
+        max_digits=7,
+        decimal_places=3,
+        validators=[MinValueValidator(0)],
+        help_text="Pesos per litre.",
+    )
+    as_of = models.DateField(help_text="The date the survey itself carries.")
+    source_name = models.CharField(max_length=80)
+    source_url = models.URLField(blank=True)
+    # What the survey calls this station, which is rarely what OSM calls it.
+    # Worth keeping: it is the only way to check a match by eye afterwards.
+    station_label = models.CharField(max_length=200, blank=True)
+    fetched_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["place", "fuel_type"], name="uniq_survey_station_fuel"
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["fuel_type", "place"], name="idx_survey_fuel_station"
+            ),
+        ]
+        ordering = ["place_id", "fuel_type"]
+
+    def __str__(self) -> str:
+        return f"{self.place} {self.get_fuel_type_display()} @ {self.price} (survey)"
+
+    @property
+    def is_fresh(self) -> bool:
+        return (timezone.localdate() - self.as_of).days <= settings.PRICE_FRESH_DAYS
 
 
 class DOEAdvisory(models.Model):

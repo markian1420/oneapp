@@ -20,7 +20,12 @@ from django.utils import timezone
 from apps.places.geo import ROAD_DISTANCE_FACTOR, haversine_km
 from apps.places.models import Place
 
-from .models import DOEAdvisory, PriceObservation, PriceTier
+from .models import (
+    DOEAdvisory,
+    PriceObservation,
+    PriceTier,
+    StationSurveyPrice,
+)
 
 @dataclass(frozen=True)
 class Quote:
@@ -47,6 +52,7 @@ class Quote:
     def badge_class(self) -> str:
         return {
             PriceTier.LOGGED: "badge-success",
+            PriceTier.SURVEY: "badge-survey",
             PriceTier.ADVISORY: "badge-info",
             PriceTier.ESTIMATED: "badge-warning",
             PriceTier.UNKNOWN: "badge-muted",
@@ -59,17 +65,24 @@ UNKNOWN_QUOTE = Quote(price=None, tier=PriceTier.UNKNOWN, detail="No price on re
 def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
     """Resolve a price for every station in one pass.
 
-    Two queries regardless of how many stations are on screen. Doing this per
-    marker would be a query per pin, and the map draws up to a few hundred.
+    Three queries regardless of how many stations are on screen - one per
+    source of price. Doing this per marker would be a query per pin, and the
+    map draws up to a few hundred.
 
     Precedence, best first:
 
     1. A fresh price you logged at that exact station.
-    2. This week's DOE advisory for that brand in that region.
-    3. The region's prevailing advisory price, ignoring brand.
-    4. A stale price you logged there.
+    2. A current survey price for that exact station.
+    3. This week's DOE advisory for that brand in that region.
+    4. The region's prevailing advisory price, ignoring brand.
+    5. A stale price you logged there.
 
-    (3) deliberately outranks (4). Pump prices move every Tuesday, so a
+    (2) outranks (3) because it is about this pump rather than every pump of
+    that brand, and the survey republishes far more often than the bulletin.
+    It sits below (1) because nobody here saw it: the publisher derives some
+    grades from others, and a receipt does not.
+
+    (4) deliberately outranks (5). Pump prices move every Tuesday, so a
     three-week-old receipt from the right station is usually further off than
     this week's number for the wrong brand. Both remain visibly distinct from a
     current station-specific price.
@@ -93,6 +106,13 @@ def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
         # Ordered newest-first within each station, so the first one wins.
         latest_observation.setdefault(observation.place_id, observation)
 
+    survey: dict[int, StationSurveyPrice] = {
+        row.place_id: row
+        for row in StationSurveyPrice.objects.filter(
+            place_id__in=ids, fuel_type=fuel_type
+        ).only("place_id", "price", "as_of", "source_name")
+    }
+
     by_brand: dict[tuple[str, str], DOEAdvisory] = {}
     if regions:
         advisories = (
@@ -113,6 +133,16 @@ def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
                 tier=PriceTier.LOGGED,
                 as_of=timezone.localtime(observation.observed_at).date(),
                 detail=observation.get_source_display(),
+            )
+            continue
+
+        surveyed = survey.get(place.pk)
+        if surveyed and surveyed.is_fresh:
+            resolved[place.pk] = Quote(
+                price=surveyed.price,
+                tier=PriceTier.SURVEY,
+                as_of=surveyed.as_of,
+                detail=surveyed.source_name,
             )
             continue
 

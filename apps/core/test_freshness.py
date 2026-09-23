@@ -93,11 +93,11 @@ class StatusTests(TestCase):
         # Four days is behind for a daily feed and perfectly fine for a
         # weekly one.
         log(source="fuel_metrofuel", hours_ago=24 * 4)
-        log(source="fuel_gaswatch", hours_ago=24 * 4)
+        log(source="promos_banks", hours_ago=24 * 4)
 
         state = {s.source.key: s for s in statuses()}
         self.assertEqual(state["fuel_metrofuel"].state, "due")
-        self.assertEqual(state["fuel_gaswatch"].state, "current")
+        self.assertEqual(state["promos_banks"].state, "current")
 
     def test_the_summary_counts_what_needs_attention(self):
         log(source="fuel_metrofuel", hours_ago=1)

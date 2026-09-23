@@ -50,7 +50,7 @@ centered on the NCR/Metro Manila workflow.
 |---|---|---|---|
 | Fuel stations and places | OpenStreetMap via Overpass | Manual refresh | Imported as place/station records; station region comes from the import area |
 | Fuel baseline | DOE weekly advisory | Weekly | Brand and regional prices; entered manually or imported from CSV/XLSX |
-| Fuel regional band | GasWatch PH survey | Weekly/daily source dependent | Loaded as Metro Manila regional prevailing prices, not per-station observations |
+| Fuel per-station prices | GasWatch PH survey | Daily | A price for each station it can be matched to by position and brand, plus a regional median for the rest |
 | Fuel brand averages | MetroFuel Tracker | Daily source dependent | Adds brand-level advisory rows for diesel and unleaded 91 |
 | Grocery commodities | DA Daily Price Index for NCR | Weekdays | Prevailing retail commodity prices across named wet markets |
 | Bank card promos | Public bank promo pages | Continuous | Metrobank currently has the structured importer |
@@ -80,13 +80,19 @@ Each station price resolves through these tiers, best first:
 | Tier | Shown as | Source |
 |---|---|---|
 | 1 | **You paid this** | A current first-hand station price within `PRICE_FRESH_DAYS` |
-| 2 | **DOE weekly advisory** | Current brand price for the station's DOE region |
-| 3 | **Regional price** | Current regional prevailing price for the DOE region |
-| 4 | **Older noted price** | A first-hand station price that is now outside the freshness window |
+| 2 | **Station survey** | GasWatch's current price for that exact station |
+| 3 | **DOE weekly advisory** | Current brand price for the station's DOE region |
+| 4 | **Regional price** | Current regional prevailing price for the DOE region |
+| 5 | **Older noted price** | A first-hand station price that is now outside the freshness window |
 | - | **No price** | Nothing usable on record |
 
+A survey price outranks the advisory because it is about one pump rather than
+every pump of that brand, and it republishes far more often than the weekly
+bulletin. It stays below a first-hand price because nobody here saw it: the
+publisher derives some grades from others, and a receipt does not.
+
 Regional prices are useful coverage, not pump claims. Brand advisory rows beat
-regional rows, and fresh first-hand station notes beat both.
+regional rows, and fresh first-hand station notes beat all of it.
 
 The station ranking math lives in `apps/fuel/services.py`:
 
@@ -468,6 +474,14 @@ are recorded basket lines for that item at those stores. The DA NCR price is a
 benchmark, not a supermarket shelf price.
 
 **The map markers are broken.** Run `npm run build` so `static/vendor` is present.
+
+**Every station shows the same price.** That is the regional median, which is
+what the map falls back to when nothing more specific exists. Run
+`import_gaswatch`: it attaches a per-station price to every station it can
+match, which is around 70% of Metro Manila, and those read as "Station survey"
+rather than "Regional price". A station that stays on the regional figure
+either has no survey counterpart within 150 metres or carries a different
+brand on each side, and the match is refused rather than guessed.
 
 **Every station shows `No price`.** Import Metro Manila places, then enter the
 DOE advisory or load GasWatch/MetroFuel data. Check that stations have `NCR` as

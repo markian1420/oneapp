@@ -231,6 +231,7 @@
   .badge-warning,
   .badge-danger,
   .badge-info,
+  .badge-survey,
   .badge-muted {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1
            text-[11px] font-extrabold uppercase tracking-wide;
@@ -240,12 +241,16 @@
   .badge-warning { @apply bg-amber-100 text-amber-700; }
   .badge-danger  { @apply bg-red-100 text-red-700; }
   .badge-info    { @apply bg-sky-100 text-sky-700; }
+  /* A survey price is about this pump but nobody here saw it, so it reads as
+     its own thing rather than borrowing the colour of either neighbour. */
+  .badge-survey  { @apply bg-teal-100 text-teal-700; }
   .badge-muted   { @apply bg-slate-100 text-slate-600; }
 
   .dark .badge-success { @apply bg-brand-500/15 text-brand-300; }
   .dark .badge-warning { @apply bg-amber-500/15 text-amber-300; }
   .dark .badge-danger  { @apply bg-red-500/15 text-red-300; }
   .dark .badge-info    { @apply bg-sky-500/15 text-sky-300; }
+  .dark .badge-survey  { @apply bg-teal-500/15 text-teal-300; }
   .dark .badge-muted   { @apply bg-slate-500/15 text-slate-300; }
 
   /* ---------------------------------------------------------------- Tables */
@@ -375,6 +380,7 @@
   }
 
   .pin-logged    { @apply border-brand-700 bg-brand-600 text-white; }
+  .pin-survey    { @apply border-teal-700 bg-teal-600 text-white; }
   .pin-advisory  { @apply border-sky-700 bg-sky-600 text-white; }
   .pin-estimated { @apply border-amber-600 bg-amber-500 text-white; }
   .pin-unknown   { @apply border-slate-400 bg-white text-slate-500; }
