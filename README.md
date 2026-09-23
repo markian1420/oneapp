@@ -59,6 +59,13 @@ The app does not claim live per-station pump prices because no official live
 Philippine feed exists. Per-station prices only become first-hand when someone
 records a price seen at that station.
 
+Station coverage is OpenStreetMap's, not a commercial map's, and stops at the
+boundary of the area imported: a Metro Manila import holds every `amenity=fuel`
+inside the NCR relation and nothing across the line in Rizal or Cavite. OSM
+also tends to record the brand rather than the branch, so a station reads
+"Petron" where a commercial map says "Petron Capital Commons". Import the
+neighbouring provinces with `--area` if the boundary is the problem.
+
 ## Fuel Pricing
 
 Each station price resolves through these tiers, best first:
@@ -345,6 +352,14 @@ Places are not in the routine refresh. Re-import them every few months by
 running the workflow by hand with its `only` input set to `places_osm`, which
 takes that path instead of the due-source pass. Any source key works there when
 one needs catching up.
+
+All nine kinds of place in one pass does not finish on a hosted runner. The
+import is hundreds of Overpass queries and the public instances rate-limit by
+address; a shared runner address is throttled far harder than a home
+connection, so most of the run is spent waiting. Use the `places_kind` input to
+take a kind or two at a time - `supermarket convenience` - and what is already
+imported stays imported, so the next run picks up the rest rather than starting
+over.
 
 GitHub disables scheduled workflows in a repository with no activity for 60
 days. A commit, or one manual run, resets that.

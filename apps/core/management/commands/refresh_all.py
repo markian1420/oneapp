@@ -28,6 +28,20 @@ from apps.core.models import SourceRun
 ROUTINE = [s for s in SOURCES if s.key != "places_osm"]
 
 
+def _without_kinds(parts: list[str]) -> list[str]:
+    """The command line with every --kind and its value dropped."""
+    kept: list[str] = []
+    skip = False
+    for token in parts:
+        if skip:
+            skip = False
+        elif token == "--kind":
+            skip = True
+        else:
+            kept.append(token)
+    return kept
+
+
 class Command(BaseCommand):
     help = (
         "Refresh every source on its own cadence. Safe to run daily; each "
@@ -48,6 +62,13 @@ class Command(BaseCommand):
         parser.add_argument(
             "--due-only", action="store_true",
             help="Skip anything already current. Useful on a frequent timer.",
+        )
+        parser.add_argument(
+            "--places-kind", action="append", default=[], metavar="KIND",
+            help="Import only these kinds of place, replacing the usual 'all'. "
+                 "Repeatable. A full import of every kind takes hours against "
+                 "rate-limited public Overpass instances; one kind at a time "
+                 "finishes, and the kinds already done stay done.",
         )
         parser.add_argument(
             "--strict", action="store_true",
@@ -91,6 +112,10 @@ class Command(BaseCommand):
             ok, detail, rows = True, "", 0
             try:
                 parts = source.command.split()
+                if source.key == "places_osm" and options["places_kind"]:
+                    parts = _without_kinds(parts)
+                    for kind in options["places_kind"]:
+                        parts += ["--kind", kind]
                 call_command(parts[0], *parts[1:], stdout=captured,
                              stderr=captured)
                 detail = self._summarise(captured.getvalue())

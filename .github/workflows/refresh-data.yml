@@ -19,6 +19,14 @@ on:
           is hundreds of queries against Overpass instances that rate-limit.
         required: false
         default: ""
+      places_kind:
+        description: >-
+          With only=places_osm, import just these kinds rather than all nine -
+          space separated, e.g. "supermarket convenience". All nine in one run
+          takes hours against rate-limited instances; one or two at a time
+          finishes, and what is already imported stays imported.
+        required: false
+        default: ""
 
 concurrency:
   # SQLite is not in play here, but two importers writing the same rows at once
@@ -29,14 +37,18 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    # A scheduled pass takes minutes. The ceiling is here for a hand-run places
-    # import, which walks the city in tiles and waits out rate limiting.
-    timeout-minutes: 90
+    # A scheduled pass takes minutes. The ceiling is for a hand-run places
+    # import, which walks the city in tiles and spends most of its time waiting
+    # out Overpass rate limits - from a shared runner address, that is hours
+    # rather than the half hour it takes from a normal connection. The repo is
+    # public, so runner minutes are not metered; a run that needs six is free,
+    # and one cancelled at ninety minutes is not.
+    timeout-minutes: 350
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -51,6 +63,7 @@ jobs:
           # Read through the environment rather than interpolated into the
           # script: a workflow input is untrusted text.
           ONLY: ${{ inputs.only }}
+          PLACES_KIND: ${{ inputs.places_kind }}
         # --strict so a source that fails turns the run red and GitHub mails
         # about it. Without it a feed could be down for weeks unnoticed. A
         # hand-picked run says what it wants, so neither flag applies.
@@ -59,6 +72,9 @@ jobs:
             args=""
             for key in $ONLY; do
               args="$args --only $key"
+            done
+            for kind in $PLACES_KIND; do
+              args="$args --places-kind $kind"
             done
             python manage.py refresh_all $args
           else

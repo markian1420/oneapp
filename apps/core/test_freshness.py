@@ -126,6 +126,22 @@ class RefreshCommandTests(TestCase):
         self._run(places=True)
         self.assertTrue(SourceRun.objects.filter(source="places_osm").exists())
 
+    def test_places_can_be_narrowed_to_one_kind(self):
+        # Nine kinds in one pass runs for hours against rate-limited Overpass
+        # instances and gets cancelled before it finishes; a kind at a time
+        # completes, and what is imported stays imported.
+        _, ran = self._run(only=["places_osm"], places_kind=["supermarket"])
+
+        args = list(ran.call_args.args)
+        self.assertIn("--kind", args)
+        self.assertIn("supermarket", args)
+        self.assertNotIn("all", args)
+
+    def test_asking_for_no_kind_leaves_the_usual_command_alone(self):
+        _, ran = self._run(only=["places_osm"])
+
+        self.assertIn("all", list(ran.call_args.args))
+
     def test_one_source_failing_does_not_stop_the_others(self):
         out = StringIO()
 
