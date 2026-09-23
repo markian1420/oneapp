@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 from apps.core.categories import SpendCategory
@@ -40,7 +39,6 @@ def _promo_rows(promos) -> list[dict]:
     ]
 
 
-@login_required
 @module("spend_card_promos", "Card promos")
 def card_promos(request):
     """Every card promo on record, from every issuer.
@@ -79,7 +77,6 @@ def card_promos(request):
     })
 
 
-@login_required
 @module("spend_where", "Where to buy")
 def where(request):
     """Nearest places that sell what you are after, and what is known there."""

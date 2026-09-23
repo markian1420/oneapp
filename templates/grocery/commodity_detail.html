@@ -15,6 +15,7 @@
     {% include "partials/_icon.html" with name="map" class="h-4 w-4" %}
     <span class="hidden sm:inline">Where to buy</span>
   </a>
+  {% if user.is_authenticated %}
   <form method="post" action="{% url 'grocery:commodity_track' commodity.pk %}">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -23,6 +24,7 @@
       <span class="hidden sm:inline">{% if commodity.is_tracked %}Untrack{% else %}Track{% endif %}</span>
     </button>
   </form>
+  {% endif %}
 {% endblock %}
 
 {% block content %}

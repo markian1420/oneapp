@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.core.tables import Column, build_table
-from apps.core.views import module
+from apps.core.views import editing_requires_login, module
 
 from apps.places.models import Place, PlaceKind
 from apps.places.regions import REGION_NAMES
@@ -86,7 +86,6 @@ def _decimal(raw, fallback: Decimal) -> Decimal:
     return value if value > 0 else fallback
 
 
-@login_required
 @module("fuel_map", "Station map")
 def station_map(request):
     """The map shell.
@@ -124,7 +123,6 @@ def station_map(request):
     return render(request, "fuel/map.html", context)
 
 
-@login_required
 def stations_json(request):
     """Stations inside a bounding box, priced and scored.
 
@@ -219,7 +217,7 @@ def stations_json(request):
     })
 
 
-@login_required
+@editing_requires_login
 @module("fuel_map", "Station")
 def station_detail(request, pk: int):
     station = get_object_or_404(Place, pk=pk, kind=PlaceKind.FUEL)
@@ -277,7 +275,7 @@ def station_favorite(request, pk: int):
     return redirect("fuel:station_detail", pk=station.pk)
 
 
-@login_required
+@editing_requires_login
 @module("fuel_advisory", "DOE advisory")
 def advisory(request):
     if request.method == "POST":

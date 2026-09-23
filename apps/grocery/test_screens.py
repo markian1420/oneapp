@@ -280,13 +280,11 @@ class GroceryScreenTests(TestCase):
         commodity.refresh_from_db()
         self.assertTrue(commodity.is_tracked)
 
-    def test_signed_out_users_reach_nothing(self):
+    def test_signed_out_users_read_every_screen(self):
         self.client.logout()
         for name in ("grocery:commodities", "grocery:map"):
             with self.subTest(screen=name):
-                response = self.client.get(reverse(name))
-                self.assertEqual(response.status_code, 302)
-                self.assertIn("/login/", response["Location"])
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
 
 class GroceryMapEndpointTests(TestCase):
@@ -355,8 +353,7 @@ class GroceryMapEndpointTests(TestCase):
     def test_missing_bounding_box_is_bad_request(self):
         self.assertEqual(self.client.get(self.url).status_code, 400)
 
-    def test_signed_out_callers_are_redirected(self):
+    def test_signed_out_callers_get_the_markers_too(self):
         self.client.logout()
         response = self.client.get(self.url, self.box)
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        self.assertEqual(response.status_code, 200)

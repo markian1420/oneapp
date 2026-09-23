@@ -44,7 +44,6 @@ STORE_GROUPS = {
 }
 
 
-@login_required
 @module("grocery_prices", "Commodity prices")
 def commodities(request):
     search = request.GET.get("q", "").strip()
@@ -108,7 +107,6 @@ def commodities(request):
     return render(request, "grocery/commodities.html", context)
 
 
-@login_required
 @module("grocery_map", "Grocery map")
 def grocery_map(request):
     """Map shell for nearby supermarkets and item price comparisons."""
@@ -147,7 +145,6 @@ def _store_group_filter(group: str) -> Q:
     return query
 
 
-@login_required
 def stores_json(request):
     """Supermarkets inside a viewport, ranked by known item price when possible."""
     try:
@@ -267,7 +264,6 @@ def stores_json(request):
     })
 
 
-@login_required
 @module("grocery_prices", "Commodity")
 def commodity_detail(request, pk: int):
     commodity = get_object_or_404(Commodity, pk=pk)

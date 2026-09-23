@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 from apps.core.views import module
@@ -12,7 +11,6 @@ from apps.core.freshness import summary as freshness_summary
 from .services import REQUIREMENTS, build_briefing
 
 
-@login_required
 @module("insights", "Today")
 def briefing(request):
     return render(request, "insights/briefing.html", {

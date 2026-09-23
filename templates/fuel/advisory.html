@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+<div class="grid gap-5 {% if user.is_authenticated %}xl:grid-cols-[minmax(0,1fr)_420px]{% endif %}">
 
   <section class="min-w-0 space-y-5">
     <div class="panel panel-pad">
@@ -95,6 +95,7 @@
     </div>
   </section>
 
+  {% if user.is_authenticated %}
   <aside class="min-w-0">
     <form method="post" class="panel min-w-0">
       {% csrf_token %}
@@ -136,5 +137,6 @@
       </div>
     </form>
   </aside>
+  {% endif %}
 </div>
 {% endblock %}

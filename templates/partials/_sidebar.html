@@ -17,7 +17,6 @@
     </span>
     <div class="min-w-0">
       <p class="truncate text-sm font-black tracking-tight text-ink dark:text-white">OneApp</p>
-      <p class="truncate text-[11px] font-bold uppercase tracking-[.08em] text-ink-muted dark:text-slate-400">Spend &amp; savings</p>
     </div>
     <button type="button" data-nav-toggle
             class="ml-auto rounded-lg p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink
@@ -60,14 +59,24 @@
   </nav>
 
   <div class="border-t border-slate-200/80 p-4 dark:border-white/10">
-    <div class="flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2.5">
-      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-600 to-brand-400 text-xs font-black text-white">
-        {{ user.get_username|slice:":2"|upper }}
-      </span>
-      <span class="min-w-0 flex-1">
-        <span class="block truncate text-sm font-bold text-ink dark:text-white">{{ user.get_full_name|default:user.get_username }}</span>
-        <span class="block truncate text-[11px] text-ink-muted dark:text-slate-400">Signed in</span>
-      </span>
-    </div>
+    {% if user.is_authenticated %}
+      <div class="flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2.5">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-600 to-brand-400 text-xs font-black text-white">
+          {{ user.get_username|slice:":2"|upper }}
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-bold text-ink dark:text-white">{{ user.get_full_name|default:user.get_username }}</span>
+          <span class="block truncate text-[11px] text-ink-muted dark:text-slate-400">Signed in</span>
+        </span>
+      </div>
+    {% else %}
+      <p class="px-3 text-[11px] leading-relaxed text-ink-muted dark:text-slate-500">
+        Prices and promos are public. Signing in is only for recording them.
+      </p>
+      <a href="{% url 'login' %}"
+         class="mt-2 block px-3 text-[12px] font-bold text-brand-700 hover:underline dark:text-brand-400">
+        Sign in
+      </a>
+    {% endif %}
   </div>
 </aside>

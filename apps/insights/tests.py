@@ -116,8 +116,8 @@ class BriefingScreenTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "card promo")
 
-    def test_signed_out_users_reach_nothing(self):
+    def test_signed_out_users_read_the_briefing(self):
         self.client.logout()
-        response = self.client.get(reverse("insights:briefing"))
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        self.assertEqual(
+            self.client.get(reverse("insights:briefing")).status_code, 200
+        )

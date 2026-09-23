@@ -10,6 +10,7 @@
 {% endblock %}
 
 {% block topbar_actions %}
+  {% if user.is_authenticated %}
   <form method="post" action="{% url 'fuel:station_favorite' station.pk %}">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -18,6 +19,7 @@
       <span class="hidden sm:inline">{% if station.is_favorite %}Unpin{% else %}Pin{% endif %}</span>
     </button>
   </form>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -101,6 +103,7 @@
   </section>
 
   <aside class="min-w-0 space-y-5">
+    {% if user.is_authenticated %}
     <form method="post" class="panel min-w-0">
       {% csrf_token %}
       <div class="panel-header">
@@ -121,6 +124,7 @@
         <button type="submit" class="btn-primary w-full">Save price</button>
       </div>
     </form>
+    {% endif %}
 
     <div class="panel panel-pad">
       <p class="eyebrow">Station</p>

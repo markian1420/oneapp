@@ -13,7 +13,6 @@ from .calibration import calibrate, coverage_by_region
 from .models import Place, PlaceKind
 
 
-@login_required
 @module("grocery_map", "Place")
 def place_detail(request, pk: int):
     place = get_object_or_404(Place, pk=pk)
@@ -42,7 +41,6 @@ def place_favorite(request, pk: int):
     return redirect("places:detail", pk=place.pk)
 
 
-@login_required
 @module("places_calibration", "Where am I")
 def calibration(request):
     """What the app knows about wherever you currently are.

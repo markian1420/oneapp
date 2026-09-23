@@ -6,7 +6,7 @@ import functools
 from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -15,6 +15,28 @@ from apps.fuel.services import week_start
 from apps.places.models import Place, PlaceKind
 from apps.grocery.models import CommodityPrice
 from apps.grocery.services import biggest_movers
+
+
+# GET, HEAD and OPTIONS change nothing, so they need no account. Anything else
+# does, and the account is the one that curates what the app publishes.
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def editing_requires_login(view):
+    """Open to read, signed in to write.
+
+    The screens are public: the whole point is telling anyone where fuel is
+    cheaper. What is not public is writing a price into the record everyone
+    else then reads.
+    """
+
+    @functools.wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if request.method not in SAFE_METHODS and not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        return view(request, *args, **kwargs)
+
+    return wrapper
 
 
 def module(code: str, title: str):
@@ -43,7 +65,6 @@ def module(code: str, title: str):
     return decorator
 
 
-@login_required
 @module("home", "Overview")
 def home(request):
     now = timezone.now()

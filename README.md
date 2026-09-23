@@ -19,6 +19,10 @@ as different levels of confidence.
 | **Today** | Compact insights from currently available grocery and card-promo data |
 | **Where am I** | Region and coverage checks for the current location |
 
+Every screen above is public. Signing in is only needed to record something -
+a weekly advisory, a price seen at a pump - which is what keeps the numbers
+everyone reads from being editable by anyone.
+
 ## Contents
 
 - [Data Sources](#data-sources)
@@ -166,7 +170,8 @@ visible whichever provider is in use.
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Open `http://127.0.0.1:8000/` and sign in with the superuser account.
+Open `http://127.0.0.1:8000/`. Every screen reads without an account; sign in
+with the superuser to enter an advisory, note a price, or pin a station.
 
 After frontend changes, rebuild assets:
 
@@ -287,10 +292,10 @@ Two consequences worth knowing before relying on it:
    | `ADMIN_EMAIL` | Its email address |
    | `ADMIN_PASSWORD` | Its password, at least 10 characters |
 
-4. **Create your login.** A new database has no account and the app is
-   login-only, so run `Create admin user` once from the Actions tab. The free
-   web service has no shell, which is why this is a workflow rather than a
-   command you run against it.
+4. **Create your login.** The screens are public, but recording a price is
+   not, and a new database has no account to do it with. Run `Create admin
+   user` once from the Actions tab. The free web service has no shell, which
+   is why this is a workflow rather than a command you run against it.
 
 5. **Fill the database.** Run `Refresh data` from the Actions tab with `only`
    set to `places_osm`. That is the slow one - hundreds of Overpass queries -
@@ -403,7 +408,13 @@ catching up:
 - Map tiles come from the configured raster tile provider; scripts do not come from a CDN.
 - The service worker caches the app shell and pages, but map tiles and live JSON stay network-first.
 - The app stores public bank promo facts, not card numbers, card ownership, or wallet data.
-- The app is single-user oriented: Django auth is required, but there are no business roles.
+- Reading is public and needs no account: the point of the app is telling
+  anyone where fuel is cheaper, and a login in front of that defeats it.
+- Writing is not. Entering an advisory, noting a price at a station, pinning a
+  place and tracking a commodity all require signing in, because they change
+  what everyone else then reads. The rule lives in one decorator,
+  `apps.core.views.editing_requires_login`, rather than in each view.
+- There are no business roles. One account curates; everyone else reads.
 
 ## Troubleshooting
 

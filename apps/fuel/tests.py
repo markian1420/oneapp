@@ -375,13 +375,14 @@ class StationMapEndpointTests(TestCase):
     def test_a_missing_bounding_box_is_a_bad_request(self):
         self.assertEqual(self.client.get(self.url).status_code, 400)
 
-    def test_signed_out_callers_are_sent_to_the_login_page(self):
+    def test_signed_out_callers_get_the_markers_too(self):
+        # The map screen is public, so the data behind it has to be, or the
+        # page loads with nothing on it.
         self.client.logout()
         response = self.client.get(self.url, {
             "south": 14.5, "west": 121.0, "north": 14.7, "east": 121.2,
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        self.assertEqual(response.status_code, 200)
 
     def test_the_cap_is_declared_rather_than_hidden(self):
         # A box wide enough to hold both stations, so the cap has something to
@@ -501,13 +502,11 @@ class ScreenSmokeTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_signed_out_users_reach_no_screen(self):
+    def test_signed_out_users_read_every_screen(self):
         self.client.logout()
         for name in ("core:home", "fuel:map", "fuel:advisory"):
             with self.subTest(screen=name):
-                response = self.client.get(reverse(name))
-                self.assertEqual(response.status_code, 302)
-                self.assertIn("/login/", response["Location"])
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
 
 class AdvisoryImportTests(TestCase):

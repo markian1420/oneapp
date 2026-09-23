@@ -212,12 +212,11 @@ class SpendScreenTests(TestCase):
         sortable = [h for h in response.context["table"].headers if h.sortable]
         self.assertTrue(all("q=shoe" in h.url for h in sortable))
 
-    def test_signed_out_users_reach_nothing(self):
+    def test_signed_out_users_read_every_screen(self):
         self.client.logout()
         for name in ("spend:where", "spend:card_promos"):
-            response = self.client.get(reverse(name))
-            self.assertEqual(response.status_code, 302)
-            self.assertIn("/login/", response["Location"])
+            with self.subTest(screen=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
 
 class CardPromoTests(TestCase):

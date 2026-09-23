@@ -6,10 +6,6 @@ from .navigation import grouped_modules
 
 
 def navigation(request):
-    user = getattr(request, "user", None)
-    if not user or not user.is_authenticated:
-        return {"nav_groups": []}
-
     return {
         "nav_groups": grouped_modules(),
         # Views set both of these on the request, so the sidebar knows which
