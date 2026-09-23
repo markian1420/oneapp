@@ -142,7 +142,11 @@ def quotes_for(places, fuel_type: str) -> dict[int, Quote]:
                 price=surveyed.price,
                 tier=PriceTier.SURVEY,
                 as_of=surveyed.as_of,
-                detail=surveyed.source_name,
+                # Described by what it is rather than by who published it. The
+                # publisher is still on the row - see StationSurveyPrice - and
+                # still shown on the advisory screen, which only the account
+                # curating the data can reach.
+                detail="Current price for this station",
             )
             continue
 

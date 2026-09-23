@@ -211,6 +211,19 @@ class SurveyPriceTests(TestCase):
         self.assertEqual(quote.price, Decimal("91.700"))
         self.assertEqual(quote.tier_label, "Station survey")
 
+    def test_the_screen_describes_the_price_rather_than_its_publisher(self):
+        self._survey("91.70")
+
+        quote = quotes_for([self.station], "gas_95")[self.station.pk]
+        self.assertNotIn("GasWatch", quote.detail)
+        # Still recorded, so a row can always be traced back to where it came
+        # from even though no public screen names it.
+        self.assertEqual(
+            StationSurveyPrice.objects.get(place=self.station,
+                                           fuel_type="gas_95").source_name,
+            "GasWatch PH survey",
+        )
+
     def test_your_own_price_still_beats_the_survey(self):
         self._survey("91.70")
         PriceObservation.objects.create(
