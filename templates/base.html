@@ -22,7 +22,13 @@
   </script>
 </head>
 <body class="h-full">
-{% if user.is_authenticated %}
+{% comment %}
+  The shell - sidebar, topbar, content - is every screen in the app, and every
+  screen is public. It is a block rather than a branch on who is signed in so
+  that the login and offline pages can replace it outright; branching on the
+  user is what left an anonymous visitor with a title and an empty body.
+{% endcomment %}
+{% block shell %}
 <div class="min-h-full lg:flex">
 
   {% include "partials/_sidebar.html" %}
@@ -63,10 +69,12 @@
             {% include "partials/_icon.html" with name="sun" class="h-4 w-4" %}
           </button>
 
-          <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn-ghost btn-sm">Sign out</button>
-          </form>
+          {% if user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn-ghost btn-sm">Sign out</button>
+            </form>
+          {% endif %}
         </div>
       </div>
     </header>
@@ -94,9 +102,7 @@
 
 <!-- Off-canvas backdrop for the mobile sidebar. -->
 <div id="nav-backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 backdrop-blur-sm lg:hidden"></div>
-{% else %}
-  {% block auth_content %}{% endblock %}
-{% endif %}
+{% endblock %}
 
 <script>
   (function () {

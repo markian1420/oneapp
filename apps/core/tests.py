@@ -94,7 +94,13 @@ class PublicAccessTests(TestCase):
         ]
         for url in screens:
             with self.subTest(url=url):
-                self.assertEqual(self.client.get(url).status_code, 200)
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                # 200 is not the same as a page. The shell used to be wrapped
+                # in a check on who was signed in, so an anonymous visitor got
+                # a title and an empty body - which is a 200 too.
+                self.assertContains(response, "Fuel map")
+                self.assertContains(response, "nav-backdrop")
 
     def test_the_map_data_endpoints_are_public_too(self):
         # The maps are useless if the screen loads and its markers do not.
