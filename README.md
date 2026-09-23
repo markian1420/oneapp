@@ -59,6 +59,13 @@ The app does not claim live per-station pump prices because no official live
 Philippine feed exists. Per-station prices only become first-hand when someone
 records a price seen at that station.
 
+OSM maps the same station three ways depending on who mapped it - a node, a
+traced forecourt, or a multipolygon relation where the forecourt has a hole in
+it. The importer asks for all three. It did not always: asking for nodes and
+ways alone quietly lost 61 Metro Manila fuel stations, and a query that does
+not ask cannot report what it missed. If stations are missing after an import,
+check the element type in OSM before assuming the data is not there.
+
 Station coverage is OpenStreetMap's, not a commercial map's, and stops at the
 boundary of the area imported: a Metro Manila import holds every `amenity=fuel`
 inside the NCR relation and nothing across the line in Rizal or Cavite. OSM

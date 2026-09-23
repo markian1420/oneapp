@@ -61,10 +61,14 @@ class QueryBuildingTests(TestCase):
         self.assertIn('"shop"="mall"', query)
         self.assertIn('"shop"="department_store"', query)
 
-    def test_nodes_and_polygons_are_both_requested(self):
+    def test_every_element_type_is_requested(self):
+        # OSM maps the same station three ways depending on who mapped it, and
+        # a query that asks for two of them reports no error for the third -
+        # it just returns fewer places than exist.
         query = build_query(resolve_areas(["NCR"])[0], "supermarket")
-        self.assertIn("node", query)
-        self.assertIn("way", query)
+        for element in ("node", "way", "relation"):
+            with self.subTest(element=element):
+                self.assertIn(f"  {element}[", query)
         self.assertIn("out tags center", query)
 
     def test_an_unknown_kind_is_refused(self):
@@ -107,6 +111,10 @@ class ImportTests(TestCase):
                   "addr:city": "Pasig"}},
         {"type": "way", "id": 2, "center": {"lat": 14.59, "lon": 121.07},
          "tags": {"brand": "7 Eleven"}},
+        # A forecourt mapped as a multipolygon. Real, and previously dropped:
+        # the query asked only for nodes and ways.
+        {"type": "relation", "id": 3, "center": {"lat": 14.60, "lon": 121.08},
+         "tags": {"name": "Petron Capitol Commons", "brand": "Petron"}},
     ]
 
     def _run(self, **kwargs):
@@ -121,15 +129,23 @@ class ImportTests(TestCase):
     def test_kind_is_recorded_and_brands_normalised(self):
         self._run(area=["NCR"], kind=["supermarket"])
 
-        self.assertEqual(Place.objects.filter(kind=PlaceKind.SUPERMARKET).count(), 2)
+        self.assertEqual(Place.objects.filter(kind=PlaceKind.SUPERMARKET).count(), 3)
         self.assertEqual(Place.objects.get(osm_id=1).brand, "Puregold")
         self.assertEqual(Place.objects.get(osm_id=2).brand, "7-Eleven")
+
+    def test_a_place_mapped_as_a_relation_is_imported_from_its_centre(self):
+        self._run(area=["NCR"], kind=["fuel"])
+
+        station = Place.objects.get(osm_id=3)
+        self.assertEqual(station.osm_type, "relation")
+        self.assertEqual(station.brand, "Petron")
+        self.assertEqual(float(station.latitude), 14.60)
 
     def test_importing_two_kinds_keeps_them_apart(self):
         self._run(area=["NCR"], kind=["supermarket", "convenience"])
 
-        self.assertEqual(Place.objects.count(), 4)
-        self.assertEqual(Place.objects.filter(kind=PlaceKind.CONVENIENCE).count(), 2)
+        self.assertEqual(Place.objects.count(), 6)
+        self.assertEqual(Place.objects.filter(kind=PlaceKind.CONVENIENCE).count(), 3)
 
     def test_an_unknown_kind_stops_the_command(self):
         with self.assertRaises(CommandError):
@@ -138,7 +154,7 @@ class ImportTests(TestCase):
     def test_reimporting_updates_in_place(self):
         self._run(area=["NCR"], kind=["supermarket"])
         self._run(area=["NCR"], kind=["supermarket"])
-        self.assertEqual(Place.objects.count(), 2)
+        self.assertEqual(Place.objects.count(), 3)
 
 
 class PlaceScreenTests(TestCase):

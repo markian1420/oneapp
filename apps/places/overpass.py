@@ -197,9 +197,17 @@ KIND_SELECTORS = {
 
 
 def build_query(area: Area, kind: str) -> str:
-    """Every place of one kind in one area, as nodes and as building polygons.
+    """Every place of one kind in one area, however it happens to be mapped.
 
-    'out center' collapses a polygon to a single point, which is what the map
+    All three element types, because OSM uses all three for the same thing: a
+    station is a node when someone dropped a pin, a way when someone traced
+    the forecourt, and a relation when the forecourt has a hole in it or the
+    shop and canopy were mapped as separate rings. Asking only for nodes and
+    ways silently loses the third kind - the Petron across from Estancia Mall
+    is relation 12568831 - and nothing downstream reveals the gap, because
+    what was never fetched cannot be reported missing.
+
+    'out center' collapses any of them to a single point, which is what the map
     needs - a forecourt or a mall footprint is not more useful than a pin and
     costs far more to ship to the browser.
     """
@@ -213,6 +221,7 @@ def build_query(area: Area, kind: str) -> str:
         tags = "".join(f"[{part}]" for part in selector)
         clauses.append(f'  node{tags}{where};')
         clauses.append(f'  way{tags}{where};')
+        clauses.append(f'  relation{tags}{where};')
 
     body = "\n".join(clauses)
     return f"""
@@ -278,7 +287,7 @@ def fetch_area(area: Area, kind: str, *, max_attempts: int = 5) -> list[dict]:
 
 
 def element_coordinates(element: dict) -> tuple[float, float] | None:
-    """Latitude and longitude for a node or a way's computed centre."""
+    """Latitude and longitude: a node's own, or a way or relation's centre."""
     if "lat" in element and "lon" in element:
         return float(element["lat"]), float(element["lon"])
     center = element.get("center")
